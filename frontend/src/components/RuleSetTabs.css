@@ -1,0 +1,383 @@
+/* 规则集Tab组件样式 - Solarized Light */
+
+.ruleset-tabs-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Tab栏 */
+.tabs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 1rem;
+    background: var(--color-bg-secondary, #eee8d5);
+    border-bottom: 1px solid var(--color-border, #d6d0c0);
+}
+
+.tabs-list {
+    display: flex;
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding: 0.5rem 0;
+}
+
+.tab-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary, #586e75);
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 6px 6px 0 0;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.tab-button:hover {
+    background: var(--color-bg-hover, #e8e2d1);
+}
+
+.tab-button.active {
+    background: var(--color-bg-card, #fff);
+    color: var(--color-accent-primary, #268bd2);
+    font-weight: 600;
+    border-bottom: 2px solid var(--color-accent-primary, #268bd2);
+}
+
+.tab-count {
+    font-size: 0.75rem;
+    background: var(--color-bg-tertiary, #f5efe0);
+    padding: 0.15rem 0.4rem;
+    border-radius: 10px;
+}
+
+.tab-button.active .tab-count {
+    background: rgba(38, 139, 210, 0.15);
+    color: var(--color-accent-primary, #268bd2);
+}
+
+.tab-button.add-tab {
+    color: var(--color-accent-primary, #268bd2);
+}
+
+/* 排序控件 */
+.sort-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sort-controls label {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary, #586e75);
+}
+
+.sort-controls select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--color-border, #d6d0c0);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: var(--color-bg-card, #fff);
+    color: var(--color-text-primary, #657b83);
+}
+
+/* 操作栏 */
+.actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--color-bg-tertiary, #f5efe0);
+    border-bottom: 1px solid var(--color-border, #d6d0c0);
+}
+
+.paper-count {
+    font-size: 0.9rem;
+    color: var(--color-text-secondary, #586e75);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.fetch-status {
+    padding: 0.4rem 0.8rem;
+    background: rgba(42, 161, 152, 0.15);
+    color: var(--color-info, #2aa198);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.action-btn {
+    padding: 0.4rem 0.8rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.action-btn.fetch-btn {
+    background: rgba(38, 139, 210, 0.15);
+    color: var(--color-accent-primary, #268bd2);
+}
+
+.action-btn.score-btn {
+    background: rgba(181, 137, 0, 0.15);
+    color: var(--color-warning, #b58900);
+}
+
+.action-btn.edit-btn {
+    background: rgba(108, 113, 196, 0.15);
+    color: var(--color-violet, #6c71c4);
+}
+
+.action-btn:hover {
+    opacity: 0.8;
+    transform: translateY(-1px);
+}
+
+/* 论文列表 */
+.papers-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    background: var(--color-bg-primary, #fdf6e3);
+}
+
+.loading,
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--color-text-secondary, #586e75);
+}
+
+.empty-state p {
+    margin: 0.5rem 0;
+}
+
+/* 论文卡片 */
+.paper-card {
+    background: var(--color-bg-card, #f9f4e8);
+    border: 1px solid var(--color-border, #d6d0c0);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.paper-card:hover {
+    border-color: var(--color-accent-primary, #268bd2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.paper-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.paper-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary, #657b83);
+    line-height: 1.4;
+    flex: 1;
+}
+
+.paper-scores {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.score {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.score.semantic {
+    background: var(--success-light, #dcfce7);
+    color: var(--success-color, #16a34a);
+}
+
+.score.citation {
+    background: var(--info-light, #e0e7ff);
+    color: var(--info-color, #4f46e5);
+}
+
+.paper-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #666);
+}
+
+.paper-categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+}
+
+.category-tag {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.4rem;
+    background: var(--bg-tertiary, #f0f0f0);
+    border-radius: 3px;
+    color: var(--text-secondary, #666);
+}
+
+.score-reason {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-tertiary, #888);
+    font-style: italic;
+}
+
+/* 分页 */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-top: 1px solid var(--border-light, #eee);
+}
+
+.pagination button {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border-color, #ddd);
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 标题可点击 */
+.paper-title.clickable {
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.paper-title.clickable:hover {
+    color: var(--color-accent-primary, #268bd2);
+}
+
+/* 用户反馈按钮 */
+.paper-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border, #d6d0c0);
+}
+
+.action-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--color-border, #d6d0c0);
+    background: var(--color-bg-primary, #fdf6e3);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.action-icon:hover {
+    background: var(--color-bg-hover, #e8e2d1);
+    transform: scale(1.1);
+}
+
+.action-icon.active {
+    background: rgba(181, 137, 0, 0.15);
+    border-color: var(--color-warning, #b58900);
+}
+
+.action-icon.active-good {
+    background: rgba(133, 153, 0, 0.2);
+    border-color: var(--color-success, #859900);
+}
+
+.action-icon.active-bad {
+    background: rgba(220, 50, 47, 0.15);
+    border-color: var(--color-error, #dc322f);
+}
+
+/* 分区样式 */
+.paper-section {
+    margin-bottom: 1.5rem;
+}
+
+.section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary, #657b83);
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 1rem;
+    background: var(--color-bg-secondary, #eee8d5);
+    border-radius: 6px;
+}
+
+.new-section .section-title {
+    background: rgba(38, 139, 210, 0.1);
+    color: var(--color-accent-primary, #268bd2);
+    border-left: 3px solid var(--color-accent-primary, #268bd2);
+}
+
+.curated-section .section-title {
+    background: rgba(181, 137, 0, 0.1);
+    color: var(--color-warning, #b58900);
+    border-left: 3px solid var(--color-warning, #b58900);
+}
+
+.paper-card.curated {
+    border-left: 3px solid var(--color-warning, #b58900);
+}
+
+.badge {
+    margin-right: 0.5rem;
+    font-size: 0.85em;
+}
+
+.score.venue {
+    background: rgba(108, 113, 196, 0.15);
+    color: var(--color-violet, #6c71c4);
+}

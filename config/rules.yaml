@@ -1,0 +1,44 @@
+cost:
+  daily_token_limit: 0
+  prefer_local_llm: true
+llm:
+  default_backend: ollama
+  ollama:
+    base_url: http://localhost:11434
+    model: qwen2.5:7b
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    base_url: https://api.openai.com/v1
+    model: gpt-4o-mini
+  vllm:
+    base_url: http://localhost:8000/v1
+    model: Qwen/Qwen2.5-7B-Instruct
+rules:
+  advanced:
+    authors: []
+    max_papers_per_fetch: 100
+    score_threshold: 5
+  categories:
+  - cs.AI
+  - cs.LG
+  - cs.CL
+  - cs.CV
+  date_range: 365
+  interests: '我对大模型推理优化、量化压缩、注意力机制改进相关的论文感兴趣。
+
+    特别关注在NPU/GPU上的部署优化工作。
+
+    '
+  keywords:
+    exclude:
+    - survey
+    - review
+    include:
+    - transformer
+    - quantization
+    - LLM
+    - attention
+    - inference
+scheduler:
+  fetch_time: 08:00
+  timezone: Asia/Shanghai
