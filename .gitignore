@@ -29,9 +29,15 @@ dist-ssr/
 .DS_Store
 Thumbs.db
 
-# OpenClaw
-.openclaw/
-
 # IDE
 .vscode/
 .idea/
+
+# Test artifacts
+frontend/test-results/
+frontend/playwright-report/
+
+# Temp screenshots
+*.png
+!docs/*.png
+!frontend/public/*.png
