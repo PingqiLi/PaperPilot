@@ -1,66 +1,128 @@
 import { Link, useLocation } from 'react-router-dom'
-import { FileText, Settings, Star, Search } from 'lucide-react'
-import './Layout.css'
+import {
+  Home, BarChart3, Settings, Sun, Moon, Plus,
+} from 'lucide-react'
+import { useTheme } from '../contexts/ThemeContext'
+
+const NAV_ITEMS = [
+  { to: '/', icon: Home, label: 'Home' },
+  { to: '/stats', icon: BarChart3, label: 'Cost Stats' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
+]
+
+function NavLink({ to, icon: Icon, label, active }) {
+  return (
+    <Link
+      to={to}
+      className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors no-underline"
+      style={{
+        background: active ? 'var(--bg-hover)' : 'transparent',
+        color: active ? 'var(--text-strong)' : 'var(--muted)',
+      }}
+    >
+      <Icon size={18} />
+      {label}
+    </Link>
+  )
+}
 
 function Layout({ children }) {
-    const location = useLocation()
+  const location = useLocation()
+  const { theme, toggleTheme } = useTheme()
 
-    return (
-        <div className="layout">
-            {/* 侧边栏 */}
-            <aside className="sidebar">
-                <div className="sidebar-header">
-                    <div className="logo">
-                        <div className="logo-icon">📚</div>
-                        <span className="logo-text">Paper Agent</span>
-                    </div>
-                </div>
+  return (
+    <div className="flex h-screen" style={{ background: 'var(--bg)' }}>
+      <aside
+        className="w-64 flex-shrink-0 flex flex-col border-r"
+        style={{
+          background: 'var(--bg-accent)',
+          borderColor: 'var(--border)',
+        }}
+      >
+        <Link to="/" className="p-5 flex items-center gap-3 no-underline" style={{ color: 'inherit' }}>
+          <svg viewBox="0 0 32 32" fill="none" className="w-7 h-7 flex-shrink-0" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="7" fill="var(--accent)"/>
+            <path d="M10 7h8.5l5.5 5.5V25a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" fill="white"/>
+            <path d="M18.5 7v4a1.5 1.5 0 0 0 1.5 1.5h4" fill="currentColor" fillOpacity="0.08"/>
+            <rect x="11" y="15.5" width="9" height="1.2" rx="0.6" fill="var(--accent)" opacity="0.45"/>
+            <rect x="11" y="18.5" width="6.5" height="1.2" rx="0.6" fill="var(--accent)" opacity="0.3"/>
+            <rect x="11" y="21.5" width="7.5" height="1.2" rx="0.6" fill="var(--accent)" opacity="0.18"/>
+            <circle cx="25" cy="7" r="5" fill="var(--accent-hover)"/>
+            <path d="M23 7l1 1 2-2" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          </svg>
+          <span
+            className="text-base font-semibold tracking-tight"
+            style={{ color: 'var(--text-strong)' }}
+          >
+            PaperPilot
+          </span>
+          <span
+            className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+            style={{
+              background: 'var(--accent-subtle)',
+              color: 'var(--accent)',
+            }}
+          >
+            v1.0
+          </span>
+        </Link>
 
-                <nav className="nav">
-                    <Link
-                        to="/"
-                        className={`nav-item ${location.pathname === '/' ? 'active' : ''}`}
-                    >
-                        <FileText size={20} />
-                        <span>论文订阅</span>
-                    </Link>
-                    <Link
-                        to="/favorites"
-                        className={`nav-item ${location.pathname === '/favorites' ? 'active' : ''}`}
-                    >
-                        <Star size={20} />
-                        <span>收藏夹</span>
-                    </Link>
-                    <Link
-                        to="/search"
-                        className={`nav-item ${location.pathname === '/search' ? 'active' : ''}`}
-                    >
-                        <Search size={20} />
-                        <span>搜索论文</span>
-                    </Link>
-                    <div className="nav-divider" />
-                    <Link
-                        to="/rules"
-                        className={`nav-item ${location.pathname === '/rules' ? 'active' : ''}`}
-                    >
-                        <Settings size={20} />
-                        <span>全局设置</span>
-                    </Link>
-                </nav>
-
-                <div className="sidebar-footer">
-                    <div className="footer-stats">
-                        <span className="stat-text">ArXiv论文助手</span>
-                    </div>
-                </div>
-            </aside>
-
-            {/* 主内容区 */}
-            <main className="main-content">
-                {children}
-            </main>
+        <div className="px-3 mb-2">
+          <Link
+            to="/topics/new"
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors no-underline"
+            style={{
+              background: 'var(--accent)',
+              color: 'var(--accent-foreground)',
+            }}
+          >
+            <Plus size={16} />
+            New Topic
+          </Link>
         </div>
-    )
+
+        <nav className="px-3 py-2 flex flex-col gap-1">
+          {NAV_ITEMS.map(({ to, icon, label }) => {
+            const active = location.pathname === to
+            return (
+              <NavLink key={to} to={to} icon={icon} label={label} active={active} />
+            )
+          })}
+        </nav>
+
+        <div className="flex-1" />
+
+        <div
+          className="p-3 border-t flex items-center justify-between"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>
+            PaperPilot
+          </span>
+          <button
+            onClick={toggleTheme}
+            className="p-1.5 rounded-md transition-colors cursor-pointer"
+            style={{
+              background: 'transparent',
+              color: 'var(--muted)',
+              border: 'none',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+        </div>
+      </aside>
+
+      <main
+        className="flex-1 overflow-auto"
+        style={{ background: 'var(--bg)' }}
+      >
+        {children}
+      </main>
+    </div>
+  )
 }
 
 export default Layout

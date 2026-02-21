@@ -1,125 +1,130 @@
-/**
- * 规则集API服务
- */
-import axios from 'axios'
+import api from './client'
 
-const API_BASE = '/api/v1'
+export async function generateDraft(topicSentence) {
+  const { data } = await api.post('/rulesets/draft', { topic_sentence: topicSentence })
+  return data
+}
 
-/**
- * 获取所有规则集
- */
+export async function getGlobalPapers(params = {}) {
+  const { data } = await api.get('/papers', { params })
+  return data
+}
+
 export async function getRulesets() {
-    const response = await axios.get(`${API_BASE}/rulesets`)
-    return response.data
+  const { data } = await api.get('/rulesets')
+  return data
 }
 
-/**
- * 创建规则集
- */
-export async function createRuleset(data) {
-    const response = await axios.post(`${API_BASE}/rulesets`, data)
-    return response.data
+export async function getTopicOverview() {
+  const { data } = await api.get('/rulesets/overview')
+  return data
 }
 
-/**
- * 更新规则集
- */
-export async function updateRuleset(id, data) {
-    const response = await axios.put(`${API_BASE}/rulesets/${id}`, data)
-    return response.data
+export async function createRuleset(payload) {
+  const { data } = await api.post('/rulesets', payload)
+  return data
 }
 
-/**
- * 删除规则集
- */
+export async function getRuleset(id) {
+  const { data } = await api.get(`/rulesets/${id}`)
+  return data
+}
+
+export async function updateRuleset(id, payload) {
+  const { data } = await api.put(`/rulesets/${id}`, payload)
+  return data
+}
+
 export async function deleteRuleset(id) {
-    const response = await axios.delete(`${API_BASE}/rulesets/${id}`)
-    return response.data
+  const { data } = await api.delete(`/rulesets/${id}`)
+  return data
 }
 
-/**
- * 获取规则集下的论文列表
- */
+export async function getReinitPreview(rulesetId) {
+  const { data } = await api.get(`/rulesets/${rulesetId}/reinit-preview`)
+  return data
+}
+
+export async function createRun(rulesetId, runType, { reinit = false } = {}) {
+  const { data } = await api.post(`/rulesets/${rulesetId}/runs`, { run_type: runType, reinit })
+  return data
+}
+
+export async function getRuns(rulesetId) {
+  const { data } = await api.get(`/rulesets/${rulesetId}/runs`)
+  return data
+}
+
+export async function getRun(rulesetId, runId) {
+  const { data } = await api.get(`/rulesets/${rulesetId}/runs/${runId}`)
+  return data
+}
+
 export async function getRulesetPapers(rulesetId, params = {}) {
-    const { page = 1, page_size = 20, sort_by = 'semantic_score', sort_order = 'desc', min_score = 0 } = params
-    const response = await axios.get(`${API_BASE}/rulesets/${rulesetId}/papers`, {
-        params: { page, page_size, sort_by, sort_order, min_score }
-    })
-    return response.data
+  const { data } = await api.get(`/rulesets/${rulesetId}/papers`, { params })
+  return data
 }
 
-/**
- * 触发规则集抓取
- */
-export async function triggerRulesetFetch(rulesetId) {
-    const response = await axios.post(`${API_BASE}/rulesets/${rulesetId}/fetch`)
-    return response.data
+export async function updatePaperStatus(rulesetId, paperId, status) {
+  const { data } = await api.patch(`/rulesets/${rulesetId}/papers/${paperId}/status`, { status })
+  return data
 }
 
-/**
- * 触发规则集LLM评分
- */
-export async function triggerRulesetScore(rulesetId, batchSize = 10) {
-    const response = await axios.post(`${API_BASE}/rulesets/${rulesetId}/score`, null, {
-        params: { batch_size: batchSize }
-    })
-    return response.data
+export async function getDigests(rulesetId, params = {}) {
+  const { data } = await api.get(`/rulesets/${rulesetId}/digests`, { params })
+  return data
 }
 
-/**
- * 获取规则集统计信息
- */
-export async function getRulesetStats(rulesetId) {
-    const response = await axios.get(`${API_BASE}/rulesets/${rulesetId}/stats`)
-    return response.data
+export async function createDigest(rulesetId, digestType) {
+  const { data } = await api.post(`/rulesets/${rulesetId}/digests`, { digest_type: digestType })
+  return data
 }
 
-/**
- * 更新规则集论文引用数
- */
-export async function updateRulesetCitations(rulesetId, limit = 50) {
-    const response = await axios.post(`${API_BASE}/rulesets/${rulesetId}/update-citations`, null, {
-        params: { limit }
-    })
-    return response.data
+export async function getDigest(rulesetId, digestId) {
+  const { data } = await api.get(`/rulesets/${rulesetId}/digests/${digestId}`)
+  return data
 }
 
-/**
- * 触发历史精选收集（Collect阶段）
- */
-export async function triggerCollect(rulesetId) {
-    const response = await axios.post(`${API_BASE}/rulesets/${rulesetId}/collect`)
-    return response.data
+export async function exportDigestMarkdown(rulesetId, digestId) {
+  const { data } = await api.get(`/rulesets/${rulesetId}/digests/${digestId}/markdown`, {
+    responseType: 'blob',
+  })
+  return data
 }
 
-/**
- * 触发追踪新论文（Track阶段）
- */
-export async function triggerTrack(rulesetId) {
-    const response = await axios.post(`${API_BASE}/rulesets/${rulesetId}/track`)
-    return response.data
-}
-/**
- * 触发快速筛选 (Rapid Screening)
- */
-export async function triggerRapidScreening(rulesetId, maxResults = 20) {
-    const response = await axios.post(`${API_BASE}/rulesets/${rulesetId}/rapid-screening`, null, {
-        params: { max_results: maxResults }
-    })
-    return response.data
+export async function bulkUpdatePaperStatus(rulesetId, paperIds, status) {
+  const { data } = await api.patch(`/rulesets/${rulesetId}/papers/bulk-status`, {
+    paper_ids: paperIds,
+    status,
+  })
+  return data
 }
 
-export default {
-    getRulesets,
-    createRuleset,
-    updateRuleset,
-    deleteRuleset,
-    getRulesetPapers,
-    getRulesetStats,
-    triggerRulesetFetch,
-    triggerRulesetScore,
-    updateRulesetCitations,
-    triggerCollect,
-    triggerTrack,
-    triggerRapidScreening
+export async function exportBibtex(rulesetId, status) {
+  const params = status ? { status } : {}
+  const { data } = await api.get(`/rulesets/${rulesetId}/papers/bibtex`, {
+    params,
+    responseType: 'blob',
+  })
+  return data
+}
+
+export async function getPaperDetail(rulesetId, paperId) {
+  const { data } = await api.get(`/rulesets/${rulesetId}/papers/${paperId}`)
+  return data
+}
+
+export async function analyzePaper(rulesetId, paperId) {
+  const { data } = await api.post(`/rulesets/${rulesetId}/papers/${paperId}/analyze`)
+  return data
+}
+
+export async function addPaperToTopic(rulesetId, identifier) {
+  const { data } = await api.post(`/rulesets/${rulesetId}/papers/add`, { identifier })
+  return data
+}
+
+export async function reorderTopics(payload) {
+  const { data } = await api.put('/rulesets/reorder', payload)
+  return data
 }
