@@ -1,149 +1,180 @@
 """
-Pydantic模型定义
+Pydantic schemas - v1.0.0 API
 """
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
-# ============ Paper Schemas ============
+# --- RuleSet ---
 
-class PaperBase(BaseModel):
-    """论文基础模型"""
-    arxiv_id: str
-    title: str
-    authors: List[str] = []
-    abstract: Optional[str] = None
+class RuleSetDraftRequest(BaseModel):
+    topic_sentence: str = Field(..., min_length=5, max_length=500)
+
+
+class RuleSetDraftResponse(BaseModel):
+    name: str
+    topic_sentence: str
     categories: List[str] = []
-    published_date: Optional[datetime] = None
-    pdf_url: Optional[str] = None
+    keywords_include: List[str] = []
+    keywords_exclude: List[str] = []
+    search_queries: List[str] = []
+    method_queries: List[str] = []
 
 
-class PaperCreate(PaperBase):
-    """创建论文"""
-    pass
+class RuleSetCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    topic_sentence: str = Field(..., min_length=5)
+    categories: List[str] = []
+    keywords_include: List[str] = []
+    keywords_exclude: List[str] = []
+    search_queries: List[str] = []
+    method_queries: List[str] = []
+    source_filter: str = Field(default="all", pattern="^(all|arxiv|open_access)$")
 
 
-class PaperSummary(BaseModel):
-    """论文摘要（列表展示用）"""
+class RuleSetUpdate(BaseModel):
+    name: Optional[str] = None
+    topic_sentence: Optional[str] = None
+    categories: Optional[List[str]] = None
+    keywords_include: Optional[List[str]] = None
+    keywords_exclude: Optional[List[str]] = None
+    search_queries: Optional[List[str]] = None
+    method_queries: Optional[List[str]] = None
+    source_filter: Optional[str] = Field(default=None, pattern="^(all|arxiv|open_access)$")
+    is_active: Optional[bool] = None
+
+
+class RuleSetResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
-    arxiv_id: str
-    title: str
-    authors: List[str]
+    name: str
+    topic_sentence: str
     categories: List[str]
-    published_date: Optional[datetime]
-    relevance_score: Optional[float]
-    is_starred: bool = False
-    is_read: bool = False
-    
-    class Config:
-        from_attributes = True
-
-
-class PaperDetail(PaperBase):
-    """论文详情"""
-    id: int
-    is_processed: bool
-    markdown_content: Optional[str]
-    relevance_score: Optional[float]
-    score_reason: Optional[str]
-    summary: Optional[str]
-    key_findings: Optional[List[str]]
-    methodology: Optional[str]
-    extracted_info: Optional[Dict[str, Any]]
-    analysis: Optional[List[Dict[str, Any]]] = None
-    figures: Optional[List[Dict[str, Any]]] = None
-    is_starred: bool
-    is_read: bool
-    user_notes: Optional[str]
+    keywords_include: List[str]
+    keywords_exclude: List[str]
+    search_queries: List[str]
+    method_queries: List[str] = []
+    source_filter: str = "all"
+    is_active: bool
+    is_initialized: bool
+    last_track_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 
-class PaperUpdate(BaseModel):
-    """更新论文"""
-    is_starred: Optional[bool] = None
-    is_read: Optional[bool] = None
-    user_notes: Optional[str] = None
-    feedback: Optional[str] = None  # "valuable", "not_valuable", None
+# --- Run ---
+
+class RunCreate(BaseModel):
+    run_type: str = Field(..., pattern="^(initialize|track)$")
+    # 重新初始化：清除非收藏论文后再执行 initialize
+    reinit: bool = False
 
 
-# ============ Workflow Output Schemas ============
+class RunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-class RatingResult(BaseModel):
-    """评分工作流输出"""
-    score: int = Field(ge=1, le=10)
-    reason: str
-
-
-class SummaryResult(BaseModel):
-    """摘要工作流输出"""
-    core_contribution: str
-    methodology: str
-    main_results: str
-    limitations: Optional[str] = None
+    id: int
+    ruleset_id: int
+    run_type: str
+    status: str
+    progress: Dict[str, Any] = {}
+    error: Optional[str]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    created_at: datetime
 
 
-class ExtractionResult(BaseModel):
-    """抽取工作流输出"""
+# --- Paper ---
+
+class PaperResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    arxiv_id: str
+    s2_id: Optional[str]
     title: str
     authors: List[str]
-    keywords: List[str]
-    datasets: List[str] = []
-    baselines: List[str] = []
-    metrics: Dict[str, Any] = {}
+    abstract: Optional[str]
+    categories: List[str]
+    published_date: Optional[datetime]
+    year: Optional[int]
+    venue: Optional[str]
+    pdf_url: Optional[str]
+    citation_count: int
+    influential_citation_count: int
+    impact_score: float
+    is_survey: bool = False
 
 
-# ============ API Response Schemas ============
+class PaperWithScore(BaseModel):
+    id: int
+    arxiv_id: str
+    title: str
+    authors: List[str]
+    abstract: Optional[str]
+    categories: List[str]
+    published_date: Optional[datetime]
+    year: Optional[int]
+    venue: Optional[str]
+    pdf_url: Optional[str]
+    citation_count: int
+    influential_citation_count: int = 0
+    impact_score: float
+    is_survey: bool = False
+    llm_score: Optional[float]
+    llm_reason: Optional[str]
+    status: str
+    source: str
+    topic_id: Optional[int] = None
+    analysis: Optional[Dict[str, Any]] = None
+    analyzed_at: Optional[datetime] = None
+    is_new: bool = False
+
+
+class PaperStatusUpdate(BaseModel):
+    # "inbox" | "archived" | "favorited"
+    status: str = Field(..., pattern="^(inbox|archived|favorited)$")
+
 
 class PaperListResponse(BaseModel):
-    """论文列表响应"""
     total: int
     page: int
     page_size: int
-    items: List[PaperSummary]
+    items: List[PaperWithScore]
 
 
-class FetchStatus(BaseModel):
-    """抓取状态"""
-    last_fetch: Optional[datetime]
-    next_fetch: Optional[datetime]
-    total_papers: int
-    papers_today: int
+# --- Overview ---
+
+class PaperPreview(BaseModel):
+    id: int
+    arxiv_id: str
+    title: str
+    llm_score: Optional[float]
+    llm_reason: Optional[str]
+    is_survey: bool = False
+    year: Optional[int]
+    venue: Optional[str]
 
 
-# ============ Rules Schemas ============
-
-class KeywordsConfig(BaseModel):
-    include: List[str] = []
-    exclude: List[str] = []
-
-
-class AdvancedRulesConfig(BaseModel):
-    authors: List[str] = []
-    score_threshold: int = 5
-    max_papers_per_fetch: int = 100
+class TopicPaperCounts(BaseModel):
+    total: int = 0
+    initialize: int = 0
+    track: int = 0
+    favorited: int = 0
 
 
-class CostConfig(BaseModel):
-    daily_token_limit: int = 0
-    prefer_local_llm: bool = True
+class TopicOverview(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class RulesConfig(BaseModel):
-    """规则配置"""
-    categories: List[str] = []
-    keywords: KeywordsConfig = KeywordsConfig()
-    date_range: int = 7
-    interests: str = ""
-    advanced: AdvancedRulesConfig = AdvancedRulesConfig()
-    cost: CostConfig = CostConfig()
-    s2_api_key: Optional[str] = None
-
-
-class RulesUpdateRequest(BaseModel):
-    """更新规则请求"""
-    rules: RulesConfig
+    id: int
+    name: str
+    topic_sentence: str
+    is_initialized: bool
+    created_at: datetime
+    last_track_at: Optional[datetime] = None
+    track_latest_count: int = 0
+    paper_counts: TopicPaperCounts
+    top_papers: List[PaperPreview]

@@ -1,11 +1,7 @@
 """
-Paper Agent - 路由模块
+Paper Agent - 路由模块 v1.0.0
 """
-from .health import router as health_router
-from .papers import router as papers_router
-from .rules import router as rules_router
-from .rulesets import router as rulesets_router
-from . import health, papers, rules, rulesets
+from . import health, papers, rules, rulesets, stats
+from . import digests
 
-__all__ = ["health_router", "papers_router", "rules_router", "rulesets_router",
-           "health", "papers", "rules", "rulesets"]
+__all__ = ["health", "papers", "rules", "rulesets", "stats", "digests"]

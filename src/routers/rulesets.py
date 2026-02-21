@@ -1,98 +1,144 @@
 """
-规则集API路由
+规则集API路由 - v1.0.0
 """
-from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from pydantic import BaseModel
+import asyncio
+import re
+from typing import List
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 import structlog
 
+from datetime import datetime
+
 from ..database import get_db
-from ..models import RuleSet, PaperRuleSet, Paper
-from ..services.two_stage_filter import two_stage_filter
-from ..services.semantic_scholar import semantic_scholar
+from ..models import Paper, PaperRuleSet, RuleSet, Run
+from ..schemas.paper import (
+    PaperListResponse,
+    PaperPreview,
+    PaperStatusUpdate,
+    PaperWithScore,
+    RuleSetCreate,
+    RuleSetDraftRequest,
+    RuleSetDraftResponse,
+    RuleSetResponse,
+    RuleSetUpdate,
+    RunCreate,
+    RunResponse,
+    TopicOverview,
+    TopicPaperCounts,
+)
+from ..services import app_settings
+from ..services.draft_generator import generate_draft
+from ..services.impact_scoring import compute_impact_score, is_survey_paper
+from ..services.pipeline import run_initialize, run_track
+from ..services.semantic_scholar import SemanticScholarService
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/rulesets", tags=["rulesets"])
 
 
-# Pydantic schemas
-class RuleSetCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    topic_description: Optional[str] = None  # 用于Agent筛选
-    categories: List[str] = ["cs.AI", "cs.LG"]
-    keywords_include: List[str] = []
-    keywords_exclude: List[str] = []
-    semantic_query: Optional[str] = None
-    date_range_days: int = 30
+@router.post("/draft", response_model=RuleSetDraftResponse)
+async def create_draft(req: RuleSetDraftRequest):
+    try:
+        draft = await generate_draft(req.topic_sentence)
+        return draft
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        logger.error("Draft generation endpoint failed", error=str(e))
+        raise HTTPException(status_code=502, detail=f"LLM服务异常: {str(e)}")
 
-
-class RuleSetUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    topic_description: Optional[str] = None
-    categories: Optional[List[str]] = None
-    keywords_include: Optional[List[str]] = None
-    keywords_exclude: Optional[List[str]] = None
-    semantic_query: Optional[str] = None
-    date_range_days: Optional[int] = None
-    is_active: Optional[bool] = None
-
-
-class RuleSetResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    topic_description: Optional[str]
-    categories: List[str]
-    keywords_include: List[str]
-    keywords_exclude: List[str]
-    semantic_query: Optional[str]
-    date_range_days: int
-    is_active: bool
-    is_default: bool
-    total_papers: int
-    expanded_keywords: List[str]
-    
-    class Config:
-        from_attributes = True
-
-
-class PaperWithScore(BaseModel):
-    id: int
-    arxiv_id: str
-    title: str
-    authors: List[str]
-    abstract: Optional[str]
-    categories: List[str]
-    published_date: Optional[str]
-    citation_count: int
-    semantic_score: Optional[float]
-    score_reason: Optional[str]
-    
-    class Config:
-        from_attributes = True
-
-
-# === 规则集 CRUD ===
 
 @router.get("", response_model=List[RuleSetResponse])
 def list_rulesets(db: Session = Depends(get_db)):
-    """获取所有规则集"""
-    rulesets = db.query(RuleSet).filter(RuleSet.is_active == True).all()
-    return rulesets
+    return db.query(RuleSet).filter(RuleSet.is_active == True).all()
+
+
+@router.get("/overview", response_model=List[TopicOverview])
+def get_overview(db: Session = Depends(get_db)):
+    from sqlalchemy import case, func
+
+    rulesets = db.query(RuleSet).filter(
+        RuleSet.is_active == True,
+    ).order_by(RuleSet.display_order.asc(), RuleSet.id.asc()).all()
+    result = []
+
+    for rs in rulesets:
+        counts_q = db.query(
+            func.count(PaperRuleSet.id).label("total"),
+            func.sum(case((PaperRuleSet.source == "initialize", 1), else_=0)).label("init_count"),
+            func.sum(case((PaperRuleSet.source == "track", 1), else_=0)).label("track_count"),
+            func.sum(case((PaperRuleSet.status == "favorited", 1), else_=0)).label("fav_count"),
+        ).filter(PaperRuleSet.ruleset_id == rs.id).first()
+
+        paper_counts = TopicPaperCounts(
+            total=counts_q.total or 0,
+            initialize=counts_q.init_count or 0,
+            track=counts_q.track_count or 0,
+            favorited=counts_q.fav_count or 0,
+        )
+
+        track_latest_count = 0
+        latest_track_run = db.query(Run).filter(
+            Run.ruleset_id == rs.id,
+            Run.run_type == "track",
+            Run.status == "completed",
+        ).order_by(Run.completed_at.desc()).first()
+
+        if latest_track_run and latest_track_run.started_at:
+            track_latest_count = db.query(func.count(PaperRuleSet.id)).filter(
+                PaperRuleSet.ruleset_id == rs.id,
+                PaperRuleSet.source == "track",
+                PaperRuleSet.created_at >= latest_track_run.started_at,
+            ).scalar() or 0
+
+        top_rows = db.query(Paper, PaperRuleSet).join(
+            PaperRuleSet, Paper.id == PaperRuleSet.paper_id
+        ).filter(
+            PaperRuleSet.ruleset_id == rs.id,
+        ).order_by(
+            PaperRuleSet.llm_score.desc().nullslast()
+        ).limit(5).all()
+
+        top_papers = [
+            PaperPreview(
+                id=p.id,
+                arxiv_id=p.arxiv_id,
+                title=p.title,
+                llm_score=a.llm_score,
+                llm_reason=a.llm_reason,
+                is_survey=p.is_survey or False,
+                year=p.year,
+                venue=p.venue,
+            )
+            for p, a in top_rows
+        ]
+
+        result.append(TopicOverview(
+            id=rs.id,
+            name=rs.name,
+            topic_sentence=rs.topic_sentence,
+            is_initialized=rs.is_initialized,
+            created_at=rs.created_at,
+            last_track_at=rs.last_track_at,
+            track_latest_count=track_latest_count,
+            paper_counts=paper_counts,
+            top_papers=top_papers,
+        ))
+
+    return result
 
 
 @router.post("", response_model=RuleSetResponse)
 def create_ruleset(data: RuleSetCreate, db: Session = Depends(get_db)):
-    """创建新规则集"""
-    # 检查名称唯一性
-    existing = db.query(RuleSet).filter(RuleSet.name == data.name).first()
+    existing = db.query(RuleSet).filter(RuleSet.name == data.name, RuleSet.is_active == True).first()
     if existing:
         raise HTTPException(status_code=400, detail="规则集名称已存在")
-    
     ruleset = RuleSet(**data.model_dump())
     db.add(ruleset)
     db.commit()
@@ -100,9 +146,20 @@ def create_ruleset(data: RuleSetCreate, db: Session = Depends(get_db)):
     return ruleset
 
 
+class ReorderRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1)
+
+
+@router.put("/reorder")
+def reorder_topics(data: ReorderRequest, db: Session = Depends(get_db)):
+    for i, rs_id in enumerate(data.ids):
+        db.query(RuleSet).filter(RuleSet.id == rs_id).update({"display_order": i})
+    db.commit()
+    return {"message": "排序已更新"}
+
+
 @router.get("/{ruleset_id}", response_model=RuleSetResponse)
 def get_ruleset(ruleset_id: int, db: Session = Depends(get_db)):
-    """获取单个规则集"""
     ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
     if not ruleset:
         raise HTTPException(status_code=404, detail="规则集不存在")
@@ -111,14 +168,11 @@ def get_ruleset(ruleset_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{ruleset_id}", response_model=RuleSetResponse)
 def update_ruleset(ruleset_id: int, data: RuleSetUpdate, db: Session = Depends(get_db)):
-    """更新规则集"""
     ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
     if not ruleset:
         raise HTTPException(status_code=404, detail="规则集不存在")
-    
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(ruleset, key, value)
-    
     db.commit()
     db.refresh(ruleset)
     return ruleset
@@ -126,441 +180,472 @@ def update_ruleset(ruleset_id: int, data: RuleSetUpdate, db: Session = Depends(g
 
 @router.delete("/{ruleset_id}")
 def delete_ruleset(ruleset_id: int, db: Session = Depends(get_db)):
-    """删除规则集（软删除）"""
     ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
     if not ruleset:
         raise HTTPException(status_code=404, detail="规则集不存在")
-    
     ruleset.is_active = False
     db.commit()
     return {"message": "规则集已删除"}
 
 
-# === 规则集论文操作 ===
-
-@router.get("/{ruleset_id}/papers")
-def get_ruleset_papers(
-    ruleset_id: int,
-    page: int = 1,
-    page_size: int = 20,
-    sort_by: str = "semantic_score",  # semantic_score, citation_count, published_date
-    sort_order: str = "desc",
-    min_score: float = 0,
-    db: Session = Depends(get_db)
-):
-    """获取规则集下的论文列表"""
+@router.get("/{ruleset_id}/reinit-preview")
+def reinit_preview(ruleset_id: int, db: Session = Depends(get_db)):
     ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
     if not ruleset:
         raise HTTPException(status_code=404, detail="规则集不存在")
-    
-    # 构建查询
+
+    total = db.query(func.count(PaperRuleSet.id)).filter(
+        PaperRuleSet.ruleset_id == ruleset_id,
+    ).scalar() or 0
+
+    favorited = db.query(func.count(PaperRuleSet.id)).filter(
+        PaperRuleSet.ruleset_id == ruleset_id,
+        PaperRuleSet.status == "favorited",
+    ).scalar() or 0
+
+    will_remove = total - favorited
+
+    return {
+        "total": total,
+        "favorited": favorited,
+        "will_remove": will_remove,
+    }
+
+
+@router.post("/{ruleset_id}/runs", response_model=RunResponse)
+async def create_run(
+    ruleset_id: int,
+    data: RunCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
+    if not ruleset:
+        raise HTTPException(status_code=404, detail="规则集不存在")
+
+    active_run = db.query(Run).filter(
+        Run.ruleset_id == ruleset_id,
+        Run.status.in_(["pending", "running"]),
+    ).first()
+    if active_run:
+        raise HTTPException(status_code=409, detail="该规则集已有运行中的任务")
+
+    if data.reinit and data.run_type == "initialize":
+        deleted = db.query(PaperRuleSet).filter(
+            PaperRuleSet.ruleset_id == ruleset_id,
+            PaperRuleSet.status != "favorited",
+        ).delete(synchronize_session="fetch")
+        ruleset.is_initialized = False
+        db.commit()
+        logger.info("Re-init cleanup", ruleset_id=ruleset_id, papers_removed=deleted)
+
+    run = Run(ruleset_id=ruleset_id, run_type=data.run_type)
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+
+    if data.run_type == "initialize":
+        background_tasks.add_task(run_initialize, run.id, ruleset_id)
+    else:
+        background_tasks.add_task(run_track, run.id, ruleset_id)
+
+    return run
+
+
+@router.get("/{ruleset_id}/runs", response_model=List[RunResponse])
+def list_runs(ruleset_id: int, db: Session = Depends(get_db)):
+    return db.query(Run).filter(Run.ruleset_id == ruleset_id).order_by(Run.created_at.desc()).all()
+
+
+@router.get("/{ruleset_id}/runs/{run_id}", response_model=RunResponse)
+def get_run(ruleset_id: int, run_id: int, db: Session = Depends(get_db)):
+    run = db.query(Run).filter(Run.id == run_id, Run.ruleset_id == ruleset_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="运行记录不存在")
+    return run
+
+
+@router.get("/{ruleset_id}/papers", response_model=PaperListResponse)
+def get_ruleset_papers(
+    ruleset_id: int,
+    page: int = 1,
+    page_size: int = None,
+    status: str = None,
+    source: str = None,
+    search: str = None,
+    sort_by: str = "llm_score",
+    sort_order: str = "desc",
+    min_score: float = 0,
+    db: Session = Depends(get_db),
+):
+    if page_size is None:
+        page_size = app_settings.get_int("display_top_n")
+    ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
+    if not ruleset:
+        raise HTTPException(status_code=404, detail="规则集不存在")
+
     query = db.query(Paper, PaperRuleSet).join(
         PaperRuleSet, Paper.id == PaperRuleSet.paper_id
-    ).filter(
-        PaperRuleSet.ruleset_id == ruleset_id
-    )
-    
-    # 分数过滤
+    ).filter(PaperRuleSet.ruleset_id == ruleset_id)
+
+    if status:
+        query = query.filter(PaperRuleSet.status == status)
+    if source:
+        query = query.filter(PaperRuleSet.source == source)
+    if search:
+        like_term = f"%{search}%"
+        query = query.filter(
+            (Paper.title.ilike(like_term)) | (Paper.abstract.ilike(like_term))
+        )
     if min_score > 0:
-        query = query.filter(PaperRuleSet.semantic_score >= min_score)
-    
-    # 排序
-    if sort_by == "semantic_score":
-        order_col = PaperRuleSet.semantic_score
+        query = query.filter(PaperRuleSet.llm_score >= min_score)
+
+    latest_track_run = db.query(Run).filter(
+        Run.ruleset_id == ruleset_id,
+        Run.run_type == "track",
+        Run.status == "completed",
+    ).order_by(Run.completed_at.desc()).first()
+    latest_track_start = latest_track_run.started_at if latest_track_run else None
+
+    if sort_by == "llm_score":
+        order_col = PaperRuleSet.llm_score
+    elif sort_by == "impact_score":
+        order_col = Paper.impact_score
     elif sort_by == "citation_count":
         order_col = Paper.citation_count
     else:
         order_col = Paper.published_date
-    
+
+    is_new_expr = case(
+        (
+            (PaperRuleSet.source == "track")
+            & (latest_track_start is not None)
+            & (PaperRuleSet.created_at >= latest_track_start),
+            1,
+        ),
+        else_=0,
+    ) if latest_track_start else None
+
     if sort_order == "desc":
-        query = query.order_by(order_col.desc().nullslast())
+        order_clauses = [order_col.desc().nullslast()]
     else:
-        query = query.order_by(order_col.asc().nullsfirst())
-    
-    # 分页
+        order_clauses = [order_col.asc().nullsfirst()]
+
+    if is_new_expr is not None:
+        order_clauses.insert(0, is_new_expr.desc())
+
+    query = query.order_by(*order_clauses)
+
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
-    
-    # 格式化结果
+
     papers = []
     for paper, assoc in items:
-        papers.append({
-            "id": paper.id,
-            "arxiv_id": paper.arxiv_id,
-            "title": paper.title,
-            "authors": paper.authors or [],
-            "abstract": paper.abstract,
-            "categories": paper.categories or [],
-            "published_date": paper.published_date.isoformat() if paper.published_date else None,
-            "citation_count": paper.citation_count or 0,
-            "semantic_score": assoc.semantic_score,
-            "score_reason": assoc.score_reason,
-            "is_scored": assoc.is_scored,
-            "is_curated": assoc.is_curated,
-            "is_new": assoc.is_new,
-            "is_starred": paper.is_starred,
-            "feedback": paper.feedback,
-            "venue": paper.venue,
-        })
-    
-    # 分区统计
-    curated_papers = [p for p in papers if p.get("is_curated")]
-    new_papers = [p for p in papers if p.get("is_new") and not p.get("is_curated")]
-    
-    return {
-        "items": papers,
-        "curated_papers": curated_papers,
-        "new_papers": new_papers,
-        "curated_count": len(curated_papers),
-        "new_count": len(new_papers),
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "ruleset_name": ruleset.name,
-        "is_collected": ruleset.is_collected
-    }
+        is_new = (
+            assoc.source == "track"
+            and latest_track_start is not None
+            and assoc.created_at is not None
+            and assoc.created_at >= latest_track_start
+        )
+        papers.append(PaperWithScore(
+            id=paper.id,
+            arxiv_id=paper.arxiv_id,
+            title=paper.title,
+            authors=paper.authors or [],
+            abstract=paper.abstract,
+            categories=paper.categories or [],
+            published_date=paper.published_date,
+            year=paper.year,
+            venue=paper.venue,
+            pdf_url=paper.pdf_url,
+            citation_count=paper.citation_count or 0,
+            influential_citation_count=paper.influential_citation_count or 0,
+            impact_score=paper.impact_score or 0.0,
+            is_survey=paper.is_survey or False,
+            llm_score=assoc.llm_score,
+            llm_reason=assoc.llm_reason,
+            status=assoc.status or "inbox",
+            source=assoc.source or "initialize",
+            topic_id=assoc.ruleset_id,
+            analysis=assoc.analysis,
+            analyzed_at=assoc.analyzed_at,
+            is_new=is_new,
+        ))
+
+    return PaperListResponse(total=total, page=page, page_size=page_size, items=papers)
 
 
-@router.get("/{ruleset_id}/stats")
-def get_ruleset_stats(ruleset_id: int, db: Session = Depends(get_db)):
-    """获取规则集统计信息（用于进度查询）"""
-    ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
-    if not ruleset:
-        raise HTTPException(status_code=404, detail="规则集不存在")
-    
-    # 统计论文数量
-    total_papers = db.query(PaperRuleSet).filter(
-        PaperRuleSet.ruleset_id == ruleset_id
-    ).count()
-    
-    scored_papers = db.query(PaperRuleSet).filter(
+@router.patch("/{ruleset_id}/papers/{paper_id}/status")
+def update_paper_status(
+    ruleset_id: int,
+    paper_id: int,
+    data: PaperStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    assoc = db.query(PaperRuleSet).filter(
+        PaperRuleSet.paper_id == paper_id,
         PaperRuleSet.ruleset_id == ruleset_id,
-        PaperRuleSet.is_scored == True
-    ).count()
-    
-    return {
-        "ruleset_id": ruleset_id,
-        "name": ruleset.name,
-        "total_papers": total_papers,
-        "scored_papers": scored_papers,
-        "last_fetch_at": ruleset.last_fetch_at.isoformat() if ruleset.last_fetch_at else None,
-        "expanded_keywords": ruleset.expanded_keywords or []
-    }
+    ).first()
+    if not assoc:
+        raise HTTPException(status_code=404, detail="论文关联不存在")
+    assoc.status = data.status
+    db.commit()
+    return {"message": "状态已更新"}
 
 
-# === 后台任务 ===
+class BulkStatusUpdate(BaseModel):
+    paper_ids: list[int] = Field(..., min_length=1)
+    status: str = Field(..., pattern="^(inbox|archived|favorited)$")
 
-@router.post("/{ruleset_id}/fetch")
-async def trigger_fetch(
+
+@router.patch("/{ruleset_id}/papers/bulk-status")
+def bulk_update_paper_status(
     ruleset_id: int,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    data: BulkStatusUpdate,
+    db: Session = Depends(get_db),
 ):
-    """触发规则集抓取（后台执行）"""
-    ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
-    if not ruleset:
-        raise HTTPException(status_code=404, detail="规则集不存在")
-    
-    # 添加后台任务
-    background_tasks.add_task(two_stage_filter.process_ruleset, ruleset)
-    
-    return {"message": f"规则集 '{ruleset.name}' 抓取任务已启动"}
+    updated = db.query(PaperRuleSet).filter(
+        PaperRuleSet.ruleset_id == ruleset_id,
+        PaperRuleSet.paper_id.in_(data.paper_ids),
+    ).update({"status": data.status}, synchronize_session="fetch")
+    db.commit()
+    return {"message": f"{updated} 篇论文状态已更新", "updated": updated}
 
 
-@router.post("/{ruleset_id}/score")
-async def trigger_scoring(
-    ruleset_id: int,
-    batch_size: int = 10,
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
-):
-    """触发规则集语义评分（后台执行）"""
-    ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
-    if not ruleset:
-        raise HTTPException(status_code=404, detail="规则集不存在")
-    
-    # 直接执行评分（小批量）
-    scored = await two_stage_filter.batch_score_papers(
-        ruleset_id=ruleset_id,
-        batch_size=batch_size
-    )
-    
-    return {"message": f"已评分 {scored} 篇论文"}
+def _to_bibtex(paper: Paper) -> str:
+    arxiv_id = paper.arxiv_id or ""
+    if arxiv_id.startswith("s2:"):
+        key = f"s2_{arxiv_id[3:]}"
+    else:
+        key = arxiv_id.replace(".", "_").replace("/", "_")
 
-
-@router.post("/{ruleset_id}/update-citations")
-async def update_citations(
-    ruleset_id: int,
-    limit: int = 50,
-    db: Session = Depends(get_db)
-):
-    """更新规则集论文的引用数"""
-    # 获取规则集下的论文ID
-    paper_ids = [
-        p.paper_id for p in 
-        db.query(PaperRuleSet.paper_id).filter(
-            PaperRuleSet.ruleset_id == ruleset_id
-        ).limit(limit).all()
+    authors_str = " and ".join(paper.authors or [])
+    year = paper.year or ""
+    lines = [
+        f"@article{{{key},",
+        f"  title={{{paper.title or ''}}},",
+        f"  author={{{authors_str}}},",
+        f"  year={{{year}}},",
     ]
-    
-    updated = await semantic_scholar.batch_update_citations(paper_ids=paper_ids)
-    
-    return {"message": f"已更新 {updated} 篇论文的引用数"}
+    if paper.venue:
+        lines.append(f"  journal={{{paper.venue}}},")
+    if arxiv_id and not arxiv_id.startswith("s2:"):
+        lines.append(f"  eprint={{{arxiv_id}}},")
+        lines.append(f"  archiveprefix={{arXiv}},")
+        lines.append(f"  url={{https://arxiv.org/abs/{arxiv_id}}},")
+    lines.append("}")
+    return "\n".join(lines)
 
 
-@router.post("/{ruleset_id}/collect")
-async def trigger_collect(
+S2_PAPER_FIELDS = (
+    "paperId,externalIds,title,abstract,authors,year,"
+    "citationCount,influentialCitationCount,venue,publicationVenue,"
+    "publicationTypes,publicationDate"
+)
+
+_ARXIV_RE = re.compile(r"(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5}(?:v\d+)?)", re.IGNORECASE)
+
+
+class AddPaperRequest(BaseModel):
+    identifier: str = Field(..., min_length=1)
+
+
+@router.post("/{ruleset_id}/papers/add")
+async def add_paper_to_topic(
     ruleset_id: int,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    data: AddPaperRequest,
+    db: Session = Depends(get_db),
 ):
-    """
-    触发历史精选收集（Collect阶段）
-    从过去N年的论文中筛选Top K高价值论文
-    """
-    from datetime import datetime
-    
     ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
     if not ruleset:
         raise HTTPException(status_code=404, detail="规则集不存在")
-    
-    if ruleset.is_collected:
-        return {"message": f"规则集 '{ruleset.name}' 已完成历史收集，如需重新收集请先重置"}
-    
-    # 后台执行收集任务
-    background_tasks.add_task(
-        _do_collect, 
-        ruleset_id=ruleset_id,
-        range_days=ruleset.collect_range_days,
-        top_k=ruleset.collect_count
-    )
-    
-    return {
-        "message": f"开始收集 '{ruleset.name}' 的历史精选论文（过去{ruleset.collect_range_days}天，Top {ruleset.collect_count}）",
-        "status": "collecting"
-    }
 
+    raw = data.identifier.strip()
+    m = _ARXIV_RE.search(raw)
+    arxiv_id = m.group(1) if m else None
+    if not arxiv_id:
+        raise HTTPException(status_code=400, detail="无法识别 ArXiv ID，请输入如 2501.12345 或 arxiv.org/abs/2501.12345")
 
-@router.post("/{ruleset_id}/track")
-async def trigger_track(
-    ruleset_id: int,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
-):
-    """
-    触发追踪新论文（Track阶段）
-    抓取最近N天的新论文
-    """
-    from datetime import datetime
-    
-    ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
-    if not ruleset:
-        raise HTTPException(status_code=404, detail="规则集不存在")
-    
-    # 后台执行追踪任务
-    background_tasks.add_task(
-        _do_track, 
-        ruleset_id=ruleset_id,
-        range_days=ruleset.track_range_days
-    )
-    
-    return {
-        "message": f"开始追踪 '{ruleset.name}' 的新论文（最近{ruleset.track_range_days}天）",
-        "status": "tracking"
-    }
-
-
-@router.post("/{ruleset_id}/rapid-screening")
-async def trigger_rapid_screening(
-    ruleset_id: int,
-    max_results: int = 20,
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
-):
-    """
-    触发快速主题筛选 (S2 + Agent)
-    """
-    ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
-    if not ruleset:
-        raise HTTPException(status_code=404, detail="规则集不存在")
-    
-    # 后台执行
-    background_tasks.add_task(
-        two_stage_filter.rapid_screen_ruleset, 
-        ruleset_id=ruleset_id,
-        max_results=max_results
-    )
-    
-    return {
-        "message": f"开始对 '{ruleset.name}' 进行快速筛选 (S2 + Topic Description)",
-        "status": "screening"
-    }
-
-
-# === 后台任务实现 ===
-
-async def _do_collect(ruleset_id: int, range_days: int, top_k: int):
-    """
-    执行历史精选收集 (S2优先策略)
-    策略：使用Semantic Scholar API直接搜索高引用论文
-    """
-    from datetime import datetime
-    from ..database import SessionLocal
-    from ..services.semantic_scholar import semantic_scholar
-    
-    db = SessionLocal()
-    try:
-        ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
-        if not ruleset:
-            return
-        
-        # Step 1: 使用S2收集经典论文
-
-        s2_papers = await semantic_scholar.collect_classic_papers(
-            keywords=ruleset.keywords_include or [],
-            semantic_query=ruleset.semantic_query,
-            limit=top_k * 2,  # 获取更多以防没有ArXiv ID
-            year_start=datetime.now().year - (range_days // 365 + 1)
-        )
-        
-        if not s2_papers:
-            logger.warning("No papers found from S2", ruleset_id=ruleset_id)
-            return
-        
-        # Step 2: 过滤并转换为Paper对象
-        saved_count = 0
-        for i, s2_paper in enumerate(s2_papers):
-
-            # 必须有ArXiv ID
-            external_ids = s2_paper.get("externalIds") or {}
-            arxiv_id = external_ids.get("ArXiv")
-            
-            if not arxiv_id:
-                continue
-
-            
-            # 停止条件
-            if saved_count >= top_k:
-                break
-                
-            # 检查论文是否已存在
-            existing = db.query(Paper).filter(Paper.arxiv_id == arxiv_id).first()
-            
-            # 解析日期
-
-            pub_date = None
-            if s2_paper.get("publicationDate"):
-                try:
-                    pub_date = datetime.strptime(s2_paper.get("publicationDate"), "%Y-%m-%d")
-                except:
-                    pass
-            
-            # 作者列表处理
-            authors = []
-            for author in s2_paper.get("authors", []):
-                if isinstance(author, dict) and "name" in author:
-                    authors.append(author["name"])
-                elif isinstance(author, str):
-                    authors.append(author)
-            
-            if not existing:
-                paper = Paper(
-                    arxiv_id=arxiv_id,
-                    title=s2_paper.get("title", ""),
-                    authors=authors,
-                    abstract=s2_paper.get("abstract", ""),
-                    categories=ruleset.categories, # S2不提供ArXiv分类，暂用规则集分类兜底
-                    published_date=pub_date,
-                    pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf",
-                    citation_count=s2_paper.get("citationCount", 0),
-                    semantic_scholar_id=s2_paper.get("paperId"),
-                    citation_updated_at=datetime.utcnow()
-                )
-                db.add(paper)
-                db.flush()
-            else:
-                paper = existing
-                # 更新引用数
-                paper.citation_count = s2_paper.get("citationCount", 0)
-                paper.semantic_scholar_id = s2_paper.get("paperId")
-                paper.citation_updated_at = datetime.utcnow()
-            
-            # 创建关联
-            existing_assoc = db.query(PaperRuleSet).filter(
-                PaperRuleSet.paper_id == paper.id,
-                PaperRuleSet.ruleset_id == ruleset_id
-            ).first()
-            
-            if not existing_assoc:
-                assoc = PaperRuleSet(
-                    paper_id=paper.id,
-                    ruleset_id=ruleset_id,
-                    is_curated=True,
-                    is_new=False,
-                    is_scored=False
-                )
-                db.add(assoc)
-                saved_count += 1
-        
-        # 更新规则集状态
-
-        ruleset.is_collected = True
-        ruleset.collected_at = datetime.utcnow()
-        ruleset.curated_count = saved_count
-        ruleset.total_papers = saved_count
-        
-        db.commit()
-        logger.info("Collect completed (S2)", ruleset_id=ruleset_id, saved=saved_count)
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc() 
-        logger.error("Collect failed", error=str(e))
-        db.rollback()
-    finally:
-        db.close()
-
-
-async def _do_track(ruleset_id: int, range_days: int):
-    """执行追踪新论文"""
-    from datetime import datetime
-    from ..database import SessionLocal
-    
-    db = SessionLocal()
-    try:
-        ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
-        if not ruleset:
-            return
-        
-        # 保存原始时间范围
-        original_range = ruleset.date_range_days
-        ruleset.date_range_days = range_days
-        
-        # 记录当前论文ID
-        existing_ids = set(
-            p.paper_id for p in 
-            db.query(PaperRuleSet.paper_id).filter(
-                PaperRuleSet.ruleset_id == ruleset_id
-            ).all()
-        )
-        
-        await two_stage_filter.process_ruleset(ruleset)
-        
-        # 标记新抓取的论文
-        new_associations = db.query(PaperRuleSet).filter(
+    existing = db.query(Paper).filter(Paper.arxiv_id == arxiv_id).first()
+    if existing:
+        assoc = db.query(PaperRuleSet).filter(
+            PaperRuleSet.paper_id == existing.id,
             PaperRuleSet.ruleset_id == ruleset_id,
-            ~PaperRuleSet.paper_id.in_(existing_ids) if existing_ids else True
-        ).all()
-        
-        for assoc in new_associations:
-            assoc.is_new = True
-            assoc.is_curated = False
-        
-        # 更新规则集状态
-        ruleset.date_range_days = original_range
-        ruleset.last_track_at = datetime.utcnow()
-        ruleset.new_count = len(new_associations)
-        
-        db.commit()
-    finally:
-        db.close()
+        ).first()
+        if assoc:
+            assoc.status = "favorited"
+            db.commit()
+            return {"message": "论文已存在，已标记为收藏", "paper_id": existing.id}
+
+    s2 = SemanticScholarService()
+    s2_results = await s2.search_papers(query=f"arxiv:{arxiv_id}", limit=5, fields=S2_PAPER_FIELDS)
+
+    s2_paper = None
+    for r in s2_results:
+        ext = r.get("externalIds") or {}
+        if ext.get("ArXiv") == arxiv_id or ext.get("ArXiv") == arxiv_id.split("v")[0]:
+            s2_paper = r
+            break
+    if not s2_paper and s2_results:
+        s2_paper = s2_results[0]
+
+    if not s2_paper:
+        raise HTTPException(status_code=404, detail="Semantic Scholar 未收录该论文")
+
+    ext_ids = s2_paper.get("externalIds") or {}
+    pub_date = None
+    if s2_paper.get("publicationDate"):
+        try:
+            pub_date = datetime.strptime(s2_paper["publicationDate"], "%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+
+    authors = []
+    for a in s2_paper.get("authors", []):
+        if isinstance(a, dict) and "name" in a:
+            authors.append(a["name"])
+
+    paper = existing or Paper(
+        arxiv_id=arxiv_id,
+        s2_id=s2_paper.get("paperId"),
+        title=s2_paper.get("title", ""),
+        authors=authors,
+        abstract=s2_paper.get("abstract"),
+        categories=[],
+        published_date=pub_date,
+        year=s2_paper.get("year"),
+        venue=s2_paper.get("venue"),
+        pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf",
+        citation_count=s2_paper.get("citationCount", 0) or 0,
+        influential_citation_count=s2_paper.get("influentialCitationCount", 0) or 0,
+        impact_score=compute_impact_score(s2_paper),
+        is_survey=is_survey_paper(s2_paper),
+    )
+    if not existing:
+        db.add(paper)
+        db.flush()
+
+    assoc = PaperRuleSet(
+        paper_id=paper.id,
+        ruleset_id=ruleset_id,
+        source="manual",
+        status="favorited",
+    )
+    db.add(assoc)
+    db.commit()
+
+    return {"message": "论文已添加并收藏", "paper_id": paper.id, "title": paper.title}
+
+
+@router.get("/{ruleset_id}/papers/bibtex")
+def export_bibtex(
+    ruleset_id: int,
+    status: str = None,
+    db: Session = Depends(get_db),
+):
+    ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
+    if not ruleset:
+        raise HTTPException(status_code=404, detail="规则集不存在")
+
+    query = db.query(Paper).join(
+        PaperRuleSet, Paper.id == PaperRuleSet.paper_id
+    ).filter(PaperRuleSet.ruleset_id == ruleset_id)
+
+    if status:
+        query = query.filter(PaperRuleSet.status == status)
+
+    query = query.order_by(Paper.year.desc().nullslast())
+    papers = query.all()
+
+    bibtex = "\n\n".join(_to_bibtex(p) for p in papers)
+    return PlainTextResponse(
+        content=bibtex,
+        media_type="application/x-bibtex",
+        headers={"Content-Disposition": f'attachment; filename="{ruleset.name}_papers.bib"'},
+    )
+
+
+@router.get("/{ruleset_id}/papers/{paper_id}", response_model=PaperWithScore)
+def get_paper_detail(
+    ruleset_id: int,
+    paper_id: int,
+    db: Session = Depends(get_db),
+):
+    row = db.query(Paper, PaperRuleSet).join(
+        PaperRuleSet, Paper.id == PaperRuleSet.paper_id
+    ).filter(
+        PaperRuleSet.ruleset_id == ruleset_id,
+        Paper.id == paper_id,
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="论文不存在")
+    paper, assoc = row
+    return PaperWithScore(
+        id=paper.id,
+        arxiv_id=paper.arxiv_id,
+        title=paper.title,
+        authors=paper.authors or [],
+        abstract=paper.abstract,
+        categories=paper.categories or [],
+        published_date=paper.published_date,
+        year=paper.year,
+        venue=paper.venue,
+        pdf_url=paper.pdf_url,
+        citation_count=paper.citation_count or 0,
+        influential_citation_count=paper.influential_citation_count or 0,
+        impact_score=paper.impact_score or 0.0,
+        is_survey=paper.is_survey or False,
+        llm_score=assoc.llm_score,
+        llm_reason=assoc.llm_reason,
+        status=assoc.status or "inbox",
+        source=assoc.source or "initialize",
+        topic_id=assoc.ruleset_id,
+        analysis=assoc.analysis,
+        analyzed_at=assoc.analyzed_at,
+    )
+
+
+@router.post("/{ruleset_id}/papers/{paper_id}/analyze")
+async def analyze_paper_endpoint(
+    ruleset_id: int,
+    paper_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    from ..services.paper_analyzer import analyze_paper
+
+    row = db.query(Paper, PaperRuleSet).join(
+        PaperRuleSet, Paper.id == PaperRuleSet.paper_id
+    ).filter(
+        PaperRuleSet.ruleset_id == ruleset_id,
+        Paper.id == paper_id,
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="论文不存在")
+    paper, assoc = row
+
+    async def _run():
+        from ..database import get_db_context
+        result = await analyze_paper(
+            arxiv_id=str(paper.arxiv_id),
+            title=str(paper.title),
+            authors=list(paper.authors or []),
+            abstract=str(paper.abstract) if paper.abstract else None,
+            year=int(paper.year) if paper.year else None,
+            venue=str(paper.venue) if paper.venue else None,
+            citation_count=int(paper.citation_count or 0),
+        )
+        with get_db_context() as db2:
+            a = db2.query(PaperRuleSet).filter(
+                PaperRuleSet.paper_id == paper_id,
+                PaperRuleSet.ruleset_id == ruleset_id,
+            ).first()
+            if a:
+                a.analysis = result
+                a.analyzed_at = datetime.utcnow()
+
+    background_tasks.add_task(_run)
+    return {"message": "分析已开始，请稍后刷新查看结果"}
+
+
+

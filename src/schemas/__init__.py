@@ -1,32 +1,30 @@
 """
-Paper Agent - Pydantic模型
+Paper Agent - Pydantic schemas v1.0.0
 """
 from .paper import (
-    PaperBase,
-    PaperCreate,
-    PaperSummary,
-    PaperDetail,
-    PaperUpdate,
     PaperListResponse,
-    FetchStatus,
-    RatingResult,
-    SummaryResult,
-    ExtractionResult,
-    RulesConfig,
-    RulesUpdateRequest
+    PaperResponse,
+    PaperStatusUpdate,
+    PaperWithScore,
+    RuleSetCreate,
+    RuleSetDraftRequest,
+    RuleSetDraftResponse,
+    RuleSetResponse,
+    RuleSetUpdate,
+    RunCreate,
+    RunResponse,
 )
 
 __all__ = [
-    "PaperBase",
-    "PaperCreate",
-    "PaperSummary",
-    "PaperDetail",
-    "PaperUpdate",
     "PaperListResponse",
-    "FetchStatus",
-    "RatingResult",
-    "SummaryResult",
-    "ExtractionResult",
-    "RulesConfig",
-    "RulesUpdateRequest"
+    "PaperResponse",
+    "PaperStatusUpdate",
+    "PaperWithScore",
+    "RuleSetCreate",
+    "RuleSetDraftRequest",
+    "RuleSetDraftResponse",
+    "RuleSetResponse",
+    "RuleSetUpdate",
+    "RunCreate",
+    "RunResponse",
 ]
