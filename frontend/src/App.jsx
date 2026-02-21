@@ -6,6 +6,7 @@ import RuleSetDashboard from './pages/RuleSetDashboard'
 import PaperDetail from './pages/PaperDetail'
 import CostStats from './pages/CostStats'
 import AppSettings from './pages/AppSettings'
+import Tasks from './pages/Tasks'
 
 function App() {
     return (
@@ -17,6 +18,7 @@ function App() {
                 <Route path="/topics/:id/papers/:paperId" element={<PaperDetail />} />
                 <Route path="/stats" element={<CostStats />} />
                 <Route path="/settings" element={<AppSettings />} />
+                <Route path="/tasks" element={<Tasks />} />
             </Routes>
         </Layout>
     )

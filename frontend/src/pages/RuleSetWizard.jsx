@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Sparkles, Save, ArrowLeft, Loader2, X, Plus } from 'lucide-react'
 import { generateDraft, createRuleset, createRun } from '../api/rulesets'
+import { useTasks } from '../contexts/TaskContext'
 import LlmLoadingBanner from '../components/LlmLoadingBanner'
 
 function TagInput({ tags, onChange, placeholder }) {
@@ -76,6 +77,7 @@ function TagInput({ tags, onChange, placeholder }) {
 function RuleSetWizard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { addToast } = useTasks()
   const [step, setStep] = useState('topic')
   const [topicSentence, setTopicSentence] = useState('')
   const [draft, setDraft] = useState(null)
@@ -91,12 +93,13 @@ function RuleSetWizard() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const rs = await createRuleset(draft)
-      await createRun(rs.id, 'initialize')
-      return rs
+      const run = await createRun(rs.id, 'initialize')
+      return { rs, run }
     },
-    onSuccess: (data) => {
+    onSuccess: ({ rs, run }) => {
       queryClient.invalidateQueries({ queryKey: ['rulesets'] })
-      navigate(`/topics/${data.id}`)
+      addToast({ id: run.task_id || Date.now(), title: `Initializing "${rs.name}"...`, taskId: run.task_id })
+      navigate(`/topics/${rs.id}`)
     },
   })
 

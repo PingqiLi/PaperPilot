@@ -5,8 +5,10 @@ import {
   ArrowLeft, Play, RefreshCw, Loader2, Star, Archive, Inbox, Search,
   ExternalLink, ChevronDown, ChevronUp, Settings, BookOpen, Zap, FileText,
   Map, CalendarDays, TrendingUp, Pencil, Save, X, Plus, Download, Trash2, History, Radio,
+  Sparkles,
 } from 'lucide-react'
 import LlmLoadingBanner from '../components/LlmLoadingBanner'
+import { useTasks } from '../contexts/TaskContext'
 import {
   getRuleset, getRulesetPapers, createRun, getRuns, getRun, updatePaperStatus,
   getDigests, createDigest, updateRuleset, exportDigestMarkdown, getReinitPreview,
@@ -106,6 +108,12 @@ function PaperCard({ paper, rulesetId, onStatusChange, selected, onToggleSelect 
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium" style={{ background: 'var(--warn-subtle)', color: 'var(--warn)' }}>
                 <FileText size={10} />
                 Survey
+              </span>
+            )}
+            {paper.analyzed_at && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium" style={{ background: 'var(--ok-subtle)', color: 'var(--ok)' }}>
+                <Sparkles size={10} />
+                AI Analyzed
               </span>
             )}
             {paper.venue && <span>{paper.venue}</span>}
@@ -1061,6 +1069,7 @@ function RuleSetDashboard() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { addToast } = useTasks()
   const [tab, setTab] = useState('papers')
   const [statusFilter, setStatusFilter] = useState(null)
   const [sourceFilter, setSourceFilter] = useState(null)
@@ -1119,6 +1128,9 @@ function RuleSetDashboard() {
     mutationFn: (runType) => createRun(id, runType),
     onSuccess: (data) => {
       setActiveRunId(data.id)
+      if (data.task_id) {
+        addToast({ id: data.task_id, title: `Running ${data.run_type || 'operation'}...`, taskId: data.task_id })
+      }
     },
     onError: (error) => {
       if (error?.response?.status === 409) {
@@ -1134,15 +1146,19 @@ function RuleSetDashboard() {
     queryKey: ['digests', id],
     queryFn: () => getDigests(id),
     enabled: tab === 'digests',
+    refetchInterval: tab === 'digests' ? 10000 : false,
   })
 
   const digestMutation = useMutation({
     mutationFn: (digestType) => createDigest(id, digestType),
     onMutate: (digestType) => setGeneratingDigest(digestType),
-    onSettled: () => setGeneratingDigest(null),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['digests', id] })
+    onSuccess: (data) => {
+      setGeneratingDigest(null)
+      if (data.task_id) {
+        addToast({ id: data.task_id, title: `Generating ${digestTab} digest...`, taskId: data.task_id })
+      }
     },
+    onError: () => setGeneratingDigest(null),
   })
 
   const statusMutation = useMutation({
@@ -1282,7 +1298,21 @@ function RuleSetDashboard() {
               Initialize
             </button>
           )}
-
+          {ruleset.is_initialized && !activeRunId && (
+            <button
+              onClick={() => runMutation.mutate('track')}
+              disabled={runMutation.isPending}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50"
+              style={{
+                background: 'var(--bg-elevated)',
+                color: 'var(--text)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              {runMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Track
+            </button>
+          )}
         </div>
       </div>
 
@@ -1551,11 +1581,14 @@ function RuleSetDashboard() {
             </div>
 
             {generatingDigest && (
-              <div className="mb-4">
-                <LlmLoadingBanner
-                  message={`Generating ${genLabel[generatingDigest] || generatingDigest}...`}
-                  detail="LLM is analyzing papers and generating insights. This typically takes 1-3 minutes."
-                />
+              <div
+                className="flex items-center gap-2.5 p-3 rounded-lg mb-4"
+                style={{ background: 'var(--accent-subtle)' }}
+              >
+                <Loader2 size={14} className="animate-spin" style={{ color: 'var(--accent)' }} />
+                <span className="text-xs font-medium" style={{ color: 'var(--accent)' }}>
+                  Generating {genLabel[generatingDigest] || generatingDigest}... Check Tasks page for progress.
+                </span>
               </div>
             )}
 

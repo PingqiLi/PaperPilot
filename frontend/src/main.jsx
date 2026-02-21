@@ -8,6 +8,7 @@ const routerFutureFlags = {
 }
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { TaskProvider } from './contexts/TaskContext'
 import App from './App.jsx'
 import './index.css'
 
@@ -25,7 +26,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <QueryClientProvider client={queryClient}>
             <BrowserRouter future={routerFutureFlags}>
                 <ThemeProvider>
-                    <App />
+                    <TaskProvider>
+                        <App />
+                    </TaskProvider>
                 </ThemeProvider>
             </BrowserRouter>
         </QueryClientProvider>

@@ -319,13 +319,14 @@ async def _citation_snowball(
     return scored
 
 
-async def run_initialize(run_id: int, ruleset_id: int):
+async def run_initialize(run_id: int, ruleset_id: int, task_id: int | None = None):
     """
     Initialize Pipeline:
     1. S2 broad search (multiple query variants) -> dedupe
     2. Compute impact_score -> rank -> shortlist top ~40
     3. Batch LLM scoring (5 per call) -> save results
     """
+    from .task_manager import complete_task, fail_task
     s2 = SemanticScholarService()
     db = SessionLocal()
 
@@ -479,6 +480,8 @@ async def run_initialize(run_id: int, ruleset_id: int):
         run.progress = {"stage": "done", "done": scored_count, "total": len(shortlist)}
         db.commit()
 
+        if task_id:
+            complete_task(task_id)
         logger.info("Initialize pipeline done", ruleset_id=ruleset_id, scored=scored_count)
 
     except Exception as e:
@@ -492,6 +495,8 @@ async def run_initialize(run_id: int, ruleset_id: int):
                 db.commit()
         except Exception:
             pass
+        if task_id:
+            fail_task(task_id, str(e))
     finally:
         db.close()
 
@@ -604,7 +609,8 @@ def _auto_expand_keywords(db, ruleset_id: int):
         )
 
 
-async def run_track(run_id: int, ruleset_id: int):
+async def run_track(run_id: int, ruleset_id: int, task_id: int | None = None):
+    from .task_manager import complete_task, fail_task
     s2 = SemanticScholarService()
     db = SessionLocal()
 
@@ -797,6 +803,8 @@ async def run_track(run_id: int, ruleset_id: int):
         run.progress = {"stage": "done", "done": scored_count, "total": len(new_papers)}
         db.commit()
 
+        if task_id:
+            complete_task(task_id)
         logger.info("Track pipeline done", ruleset_id=ruleset_id, new=len(new_papers), scored=scored_count)
 
     except Exception as e:
@@ -810,5 +818,7 @@ async def run_track(run_id: int, ruleset_id: int):
                 db.commit()
         except Exception:
             pass
+        if task_id:
+            fail_task(task_id, str(e))
     finally:
         db.close()

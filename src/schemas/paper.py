@@ -21,6 +21,7 @@ class RuleSetDraftResponse(BaseModel):
     keywords_exclude: List[str] = []
     search_queries: List[str] = []
     method_queries: List[str] = []
+    task_id: Optional[int] = None
 
 
 class RuleSetCreate(BaseModel):
@@ -69,8 +70,8 @@ class RuleSetResponse(BaseModel):
 
 class RunCreate(BaseModel):
     run_type: str = Field(..., pattern="^(initialize|track)$")
-    # 重新初始化：清除非收藏论文后再执行 initialize
     reinit: bool = False
+    task_id: Optional[int] = None
 
 
 class RunResponse(BaseModel):

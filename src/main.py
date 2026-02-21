@@ -11,7 +11,7 @@ from sqlalchemy import text
 
 from .config import settings
 from .database import SessionLocal, init_db
-from .routers import app_settings, digests, health, papers, rules, rulesets, stats
+from .routers import app_settings, digests, health, papers, rules, rulesets, stats, tasks
 from .services.scheduler import init_scheduler
 
 structlog.configure(
@@ -98,6 +98,7 @@ app.include_router(rules.router, prefix="/api/v1/rules", tags=["Rules"])
 app.include_router(rulesets.router, tags=["RuleSets"])
 app.include_router(digests.router, prefix="/api/v1/rulesets", tags=["digests"])
 app.include_router(stats.router, prefix="/api/v1/stats", tags=["Stats"])
+app.include_router(tasks.router)
 app.include_router(app_settings.router, tags=["Settings"])
 
 

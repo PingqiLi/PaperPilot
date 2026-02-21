@@ -1,16 +1,19 @@
 import { Link, useLocation } from 'react-router-dom'
 import {
-  Home, BarChart3, Settings, Sun, Moon, Plus,
+  Home, BarChart3, Settings, Sun, Moon, Plus, ListTodo,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
+import { useTasks } from '../contexts/TaskContext'
+import TaskToast from './TaskToast'
 
 const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home' },
+  { to: '/tasks', icon: ListTodo, label: 'Tasks', hasBadge: true },
   { to: '/stats', icon: BarChart3, label: 'Cost Stats' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
-function NavLink({ to, icon: Icon, label, active }) {
+function NavLink({ to, icon: Icon, label, active, badge }) {
   return (
     <Link
       to={to}
@@ -22,6 +25,18 @@ function NavLink({ to, icon: Icon, label, active }) {
     >
       <Icon size={18} />
       {label}
+      {badge > 0 && (
+        <span
+          className="ml-auto text-[10px] min-w-[18px] h-[18px] flex items-center justify-center rounded-full font-semibold"
+          style={{
+            background: 'var(--accent)',
+            color: 'var(--accent-foreground)',
+            animation: 'pulse-subtle 2s ease-in-out infinite',
+          }}
+        >
+          {badge}
+        </span>
+      )}
     </Link>
   )
 }
@@ -29,6 +44,7 @@ function NavLink({ to, icon: Icon, label, active }) {
 function Layout({ children }) {
   const location = useLocation()
   const { theme, toggleTheme } = useTheme()
+  const { runningCount } = useTasks()
 
   return (
     <div className="flex h-screen" style={{ background: 'var(--bg)' }}>
@@ -82,10 +98,17 @@ function Layout({ children }) {
         </div>
 
         <nav className="px-3 py-2 flex flex-col gap-1">
-          {NAV_ITEMS.map(({ to, icon, label }) => {
+          {NAV_ITEMS.map(({ to, icon, label, hasBadge }) => {
             const active = location.pathname === to
             return (
-              <NavLink key={to} to={to} icon={icon} label={label} active={active} />
+              <NavLink
+                key={to}
+                to={to}
+                icon={icon}
+                label={label}
+                active={active}
+                badge={hasBadge ? runningCount : null}
+              />
             )
           })}
         </nav>
@@ -121,6 +144,7 @@ function Layout({ children }) {
       >
         {children}
       </main>
+      <TaskToast />
     </div>
   )
 }

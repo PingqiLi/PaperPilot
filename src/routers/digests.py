@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from ..services.digest_generator import (
 )
 from ..services.email_service import send_digest, format_digest_html
 from ..services.markdown_formatter import format_digest_markdown
+from ..services.task_manager import create_task, complete_task, fail_task
 
 logger = structlog.get_logger(__name__)
 
@@ -119,11 +120,29 @@ def get_digest(ruleset_id: int, digest_id: int, db: Session = Depends(get_db)):
     return digest
 
 
-@router.post("/{ruleset_id}/digests", response_model=DigestResponse)
-async def create_digest(ruleset_id: int, data: DigestCreate, db: Session = Depends(get_db)):
+class DigestCreateResponse(BaseModel):
+    task_id: int
+    message: str
+
+
+@router.post("/{ruleset_id}/digests")
+async def create_digest(
+    ruleset_id: int,
+    data: DigestCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     ruleset = db.query(RuleSet).filter(RuleSet.id == ruleset_id).first()
     if not ruleset:
         raise HTTPException(status_code=404, detail="规则集不存在")
+
+    topic_name = str(getattr(ruleset, "name"))
+    type_labels = {"field_overview": "Field Overview", "weekly": "Weekly Digest", "monthly": "Monthly Report"}
+    label = type_labels.get(data.digest_type, data.digest_type)
+    task = create_task(
+        "digest", f"{label}: {topic_name}",
+        ruleset_id=ruleset_id, digest_type=data.digest_type,
+    )
 
     rows, period_start, period_end = _fetch_digest_papers(db, ruleset_id, data.digest_type)
     papers = _to_generator_payload(rows)
@@ -139,48 +158,57 @@ async def create_digest(ruleset_id: int, data: DigestCreate, db: Session = Depen
 
     topic_sentence = str(getattr(ruleset, "topic_sentence"))
 
-    if data.digest_type == "field_overview":
-        content = await generate_field_overview(topic_sentence, papers)
-    elif data.digest_type == "weekly":
-        content = await generate_weekly_digest(topic_sentence, papers, prev_summary=prev_summary)
-    else:
-        content = await generate_monthly_report(topic_sentence, papers, prev_summary=prev_summary)
-
-    if content is None:
-        logger.error("Digest generation failed", ruleset_id=ruleset_id, digest_type=data.digest_type)
-        raise HTTPException(status_code=502, detail="Digest生成失败")
-
-    content["paper_references"] = [
-        {"index": i, "title": p.get("title", ""), "arxiv_id": p.get("arxiv_id", "")}
-        for i, p in enumerate(papers)
-    ]
-
-    digest = Digest(
-        ruleset_id=ruleset_id,
-        digest_type=data.digest_type,
-        content=content,
-        paper_count=len(papers),
-        period_start=period_start,
-        period_end=period_end,
-    )
-    db.add(digest)
-    db.commit()
-    db.refresh(digest)
-
-    recipient = app_settings.get("digest_email_to")
-    if recipient:
-        topic_name = str(getattr(ruleset, "name"))
-        type_labels = {"field_overview": "领域概览", "weekly": "周报", "monthly": "月报"}
-        subject = f"[Paper Agent] {topic_name} — {type_labels.get(data.digest_type, data.digest_type)}"
-        html_body = format_digest_html(content, data.digest_type, topic_name)
+    async def _run():
+        from ..database import get_db_context
         try:
-            send_digest(recipient, subject, html_body,
-                        digest_id=digest.id, ruleset_id=ruleset_id,
-                        topic_name=topic_name, digest_type=data.digest_type)
-        except Exception:
-            pass
+            if data.digest_type == "field_overview":
+                content = await generate_field_overview(topic_sentence, papers)
+            elif data.digest_type == "weekly":
+                content = await generate_weekly_digest(topic_sentence, papers, prev_summary=prev_summary)
+            else:
+                content = await generate_monthly_report(topic_sentence, papers, prev_summary=prev_summary)
 
-    return digest
+            if content is None:
+                fail_task(task.id, "Digest generation returned None")
+                return
+
+            content["paper_references"] = [
+                {"index": i, "title": p.get("title", ""), "arxiv_id": p.get("arxiv_id", "")}
+                for i, p in enumerate(papers)
+            ]
+
+            with get_db_context() as db2:
+                digest = Digest(
+                    ruleset_id=ruleset_id,
+                    digest_type=data.digest_type,
+                    content=content,
+                    paper_count=len(papers),
+                    period_start=period_start,
+                    period_end=period_end,
+                )
+                db2.add(digest)
+                db2.flush()
+                digest_id = digest.id
+
+            complete_task(task.id, digest_id=digest_id)
+
+            recipient = app_settings.get("digest_email_to")
+            if recipient:
+                type_labels_cn = {"field_overview": "领域概览", "weekly": "周报", "monthly": "月报"}
+                subject = f"[Paper Agent] {topic_name} — {type_labels_cn.get(data.digest_type, data.digest_type)}"
+                html_body = format_digest_html(content, data.digest_type, topic_name)
+                try:
+                    send_digest(recipient, subject, html_body,
+                                digest_id=digest_id, ruleset_id=ruleset_id,
+                                topic_name=topic_name, digest_type=data.digest_type)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error("Digest generation failed", error=str(e))
+            fail_task(task.id, str(e))
+
+    background_tasks.add_task(_run)
+    return {"task_id": task.id, "message": "Digest generation started"}
 
 
 @router.get("/{ruleset_id}/digests/{digest_id}/markdown")

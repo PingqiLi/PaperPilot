@@ -7,6 +7,7 @@ import {
   Users, Calendar, Building2, Quote, RefreshCw,
 } from 'lucide-react'
 import { getPaperDetail, analyzePaper, updatePaperStatus } from '../api/rulesets'
+import { useTasks } from '../contexts/TaskContext'
 import LlmLoadingBanner from '../components/LlmLoadingBanner'
 
 function Badge({ children, color }) {
@@ -232,6 +233,7 @@ function PaperDetail() {
   const { id: rulesetId, paperId } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { addToast } = useTasks()
   const [analyzing, setAnalyzing] = useState(false)
 
   const { data: paper, isLoading, refetch } = useQuery({
@@ -257,7 +259,10 @@ function PaperDetail() {
   const handleAnalyze = async () => {
     setAnalyzing(true)
     try {
-      await analyzePaper(rulesetId, paperId)
+      const data = await analyzePaper(rulesetId, paperId)
+      if (data?.task_id) {
+        addToast({ id: data.task_id, title: 'Analyzing paper...', taskId: data.task_id })
+      }
     } catch {
       setAnalyzing(false)
     }

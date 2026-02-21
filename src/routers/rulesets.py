@@ -36,6 +36,7 @@ from ..services.draft_generator import generate_draft
 from ..services.impact_scoring import compute_impact_score, is_survey_paper
 from ..services.pipeline import run_initialize, run_track
 from ..services.semantic_scholar import SemanticScholarService
+from ..services.task_manager import create_task, complete_task, fail_task, update_task
 
 logger = structlog.get_logger(__name__)
 
@@ -44,12 +45,18 @@ router = APIRouter(prefix="/api/v1/rulesets", tags=["rulesets"])
 
 @router.post("/draft", response_model=RuleSetDraftResponse)
 async def create_draft(req: RuleSetDraftRequest):
+    preview = req.topic_sentence[:60] + ("..." if len(req.topic_sentence) > 60 else "")
+    task = create_task("topic_init", f"New Topic: {preview}", status="running")
     try:
         draft = await generate_draft(req.topic_sentence)
+        update_task(task.id, status="awaiting_approval")
+        draft.task_id = task.id
         return draft
     except ValueError as e:
+        fail_task(task.id, str(e))
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
+        fail_task(task.id, str(e))
         logger.error("Draft generation endpoint failed", error=str(e))
         raise HTTPException(status_code=502, detail=f"LLM服务异常: {str(e)}")
 
@@ -244,10 +251,23 @@ async def create_run(
     db.commit()
     db.refresh(run)
 
-    if data.run_type == "initialize":
-        background_tasks.add_task(run_initialize, run.id, ruleset_id)
+    topic_name = str(getattr(ruleset, "name", ""))
+    type_label = "Initialize" if data.run_type == "initialize" else "Track"
+    task_id = data.task_id
+
+    if task_id:
+        update_task(task_id, status="running", run_id=run.id, ruleset_id=ruleset_id)
     else:
-        background_tasks.add_task(run_track, run.id, ruleset_id)
+        task = create_task(
+            data.run_type, f"{type_label}: {topic_name}",
+            ruleset_id=ruleset_id, run_id=run.id,
+        )
+        task_id = task.id
+
+    if data.run_type == "initialize":
+        background_tasks.add_task(run_initialize, run.id, ruleset_id, task_id)
+    else:
+        background_tasks.add_task(run_track, run.id, ruleset_id, task_id)
 
     return run
 
@@ -624,28 +644,38 @@ async def analyze_paper_endpoint(
         raise HTTPException(status_code=404, detail="论文不存在")
     paper, assoc = row
 
+    paper_title = str(paper.title or "")[:60]
+    task = create_task(
+        "paper_analysis", f"Analyze: {paper_title}",
+        ruleset_id=ruleset_id, paper_id=paper_id,
+    )
+
     async def _run():
         from ..database import get_db_context
-        result = await analyze_paper(
-            arxiv_id=str(paper.arxiv_id),
-            title=str(paper.title),
-            authors=list(paper.authors or []),
-            abstract=str(paper.abstract) if paper.abstract else None,
-            year=int(paper.year) if paper.year else None,
-            venue=str(paper.venue) if paper.venue else None,
-            citation_count=int(paper.citation_count or 0),
-        )
-        with get_db_context() as db2:
-            a = db2.query(PaperRuleSet).filter(
-                PaperRuleSet.paper_id == paper_id,
-                PaperRuleSet.ruleset_id == ruleset_id,
-            ).first()
-            if a:
-                a.analysis = result
-                a.analyzed_at = datetime.utcnow()
+        try:
+            result = await analyze_paper(
+                arxiv_id=str(paper.arxiv_id),
+                title=str(paper.title),
+                authors=list(paper.authors or []),
+                abstract=str(paper.abstract) if paper.abstract else None,
+                year=int(paper.year) if paper.year else None,
+                venue=str(paper.venue) if paper.venue else None,
+                citation_count=int(paper.citation_count or 0),
+            )
+            with get_db_context() as db2:
+                a = db2.query(PaperRuleSet).filter(
+                    PaperRuleSet.paper_id == paper_id,
+                    PaperRuleSet.ruleset_id == ruleset_id,
+                ).first()
+                if a:
+                    a.analysis = result
+                    a.analyzed_at = datetime.utcnow()
+            complete_task(task.id)
+        except Exception as e:
+            fail_task(task.id, str(e))
 
     background_tasks.add_task(_run)
-    return {"message": "分析已开始，请稍后刷新查看结果"}
+    return {"message": "分析已开始，请稍后刷新查看结果", "task_id": task.id}
 
 
 
