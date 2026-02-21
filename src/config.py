@@ -1,128 +1,74 @@
 """
-配置管理
+配置管理 - v1.0.0
+SQLite + Qwen3.5-Plus (OpenAI-compatible API)
 """
-import os
 from pathlib import Path
 from typing import List, Optional
+
 from pydantic import Field
-from pydantic_settings import BaseSettings
-import yaml
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """应用配置"""
-    
-    # 数据库
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     database_url: str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/paper_agent",
-        description="PostgreSQL连接URL"
+        default="sqlite:///data/paper_agent.db",
+        description="SQLite数据库路径"
     )
-    
-    # Redis
-    redis_url: str = Field(
-        default="redis://localhost:6379/0",
-        description="Redis连接URL"
-    )
-    
+
     # CORS
     cors_origins: List[str] = Field(
         default=["http://localhost:3000", "http://localhost:5173"],
         description="允许的CORS来源"
     )
-    
-    # 规则配置文件路径
-    rules_config_path: Path = Field(
-        default=Path("config/rules.yaml"),
-        description="规则配置文件路径"
+
+    # LLM配置 (Qwen3.5-Plus via Alibaba Cloud Bailian, OpenAI-compatible)
+    llm_api_key: Optional[str] = Field(
+        default=None,
+        description="LLM API Key (Alibaba Cloud Bailian)"
     )
-    
-    # LLM配置
-    openai_api_key: Optional[str] = Field(default=None)
-    openai_base_url: str = Field(default="https://api.openai.com/v1")
-    ollama_base_url: str = Field(default="http://localhost:11434")
-    vllm_base_url: str = Field(default="http://localhost:8000/v1")
-    default_llm_backend: str = Field(default="ollama")
-    default_llm_model: str = Field(default="qwen3-vl:8b")
+    llm_base_url: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        description="LLM API Base URL (OpenAI-compatible)"
+    )
+    llm_model: str = Field(
+        default="qwen3.5-plus",
+        description="LLM模型ID"
+    )
+    llm_max_tokens: int = Field(
+        default=4096,
+        description="LLM最大输出token数"
+    )
+    llm_temperature: float = Field(
+        default=0.3,
+        description="LLM温度参数（低温=更确定性输出）"
+    )
 
     # Semantic Scholar
     s2_api_key: Optional[str] = Field(default=None)
 
-    # OpenClaw
-    openclaw_gateway_uri: str = Field(
-        default="ws://127.0.0.1:19001",
-        description="OpenClaw Gateway WebSocket URI"
-    )
-    openclaw_gateway_token: Optional[str] = Field(
-        default=None,
-        description="OpenClaw Gateway Authentication Token"
-    )
-    
     # 日志
     log_level: str = Field(default="INFO")
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+
+    smtp_host: str = Field(default="")
+    smtp_port: int = Field(default=587)
+    smtp_user: str = Field(default="")
+    smtp_password: str = Field(default="")
+    smtp_from: str = Field(default="")
+    digest_email_to: str = Field(default="")
+
+    # 数据目录
+    data_dir: Path = Field(
+        default=Path("data"),
+        description="数据存储目录"
+    )
 
 
-class RulesConfig:
-    """规则配置加载器"""
-    
-    def __init__(self, config_path: Path):
-        self.config_path = config_path
-        self._config = None
-    
-    def load(self) -> dict:
-        """加载规则配置"""
-        if self._config is None:
-            if self.config_path.exists():
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    self._config = yaml.safe_load(f)
-            else:
-                self._config = {}
-        return self._config
-    
-    def reload(self) -> dict:
-        """重新加载配置"""
-        self._config = None
-        return self.load()
-    
-    @property
-    def categories(self) -> List[str]:
-        config = self.load()
-        return config.get("rules", {}).get("categories", [])
-    
-    @property
-    def keywords_include(self) -> List[str]:
-        config = self.load()
-        return config.get("rules", {}).get("keywords", {}).get("include", [])
-    
-    @property
-    def keywords_exclude(self) -> List[str]:
-        config = self.load()
-        return config.get("rules", {}).get("keywords", {}).get("exclude", [])
-    
-    @property
-    def interests(self) -> str:
-        config = self.load()
-        return config.get("rules", {}).get("interests", "")
-    
-    @property
-    def score_threshold(self) -> int:
-        config = self.load()
-        return config.get("rules", {}).get("advanced", {}).get("score_threshold", 5)
-    
-    @property
-    def llm_config(self) -> dict:
-        config = self.load()
-        return config.get("llm", {})
-
-    @property
-    def s2_api_key(self) -> Optional[str]:
-        config = self.load()
-        return config.get("s2_api_key")
 
 
 # 全局配置实例
 settings = Settings()
-rules_config = RulesConfig(settings.rules_config_path)
+
+# 确保数据目录存在
+settings.data_dir.mkdir(parents=True, exist_ok=True)
