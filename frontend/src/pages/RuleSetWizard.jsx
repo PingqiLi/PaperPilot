@@ -98,6 +98,7 @@ function RuleSetWizard() {
     },
     onSuccess: ({ rs, run }) => {
       queryClient.invalidateQueries({ queryKey: ['rulesets'] })
+      queryClient.invalidateQueries({ queryKey: ['topicOverview'] })
       addToast({ id: run.task_id || Date.now(), title: `Initializing "${rs.name}"...`, taskId: run.task_id })
       navigate(`/topics/${rs.id}`)
     },
