@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Key, Mail, Sliders, Clock, Check, AlertCircle, ChevronDown, ChevronRight, Bot, GraduationCap, Send, Loader2, History, XCircle, CheckCircle2, Sparkles, RotateCcw } from 'lucide-react'
+import { Key, Mail, Sliders, Clock, Check, AlertCircle, ChevronDown, ChevronRight, Bot, GraduationCap, Send, Loader2, History, XCircle, CheckCircle2, Sparkles, RotateCcw, FlaskConical } from 'lucide-react'
 import { getSettings, updateSettings, getEmailLogs, sendTestEmail, getPromptDefaults } from '../api/settings'
 
 const SECTIONS = [
@@ -861,6 +861,74 @@ function EmailSection({ fields, changes, handleChange }) {
   )
 }
 
+function PipelineSection({ fields, changes, handleChange }) {
+  const regularFields = {}
+  const experimentalFields = {}
+
+  for (const [key, meta] of Object.entries(fields)) {
+    if (key.startsWith('auto_analysis_')) {
+      experimentalFields[key] = meta
+    } else {
+      regularFields[key] = meta
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Object.entries(regularFields).map(([fieldKey, meta]) => (
+          <FieldInput
+            key={fieldKey}
+            fieldKey={fieldKey}
+            meta={meta}
+            value={fieldKey in changes ? changes[fieldKey] : (meta.secret ? undefined : meta.value)}
+            onChange={handleChange}
+          />
+        ))}
+      </div>
+
+      {Object.keys(experimentalFields).length > 0 && (
+        <div
+          className="rounded-lg border p-4"
+          style={{
+            borderColor: 'color-mix(in srgb, #f59e0b 30%, var(--border))',
+            background: 'var(--bg-elevated)',
+          }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <FlaskConical size={14} style={{ color: '#f59e0b' }} />
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={{ background: '#f59e0b18', color: '#f59e0b' }}
+            >
+              Experimental
+            </span>
+            <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
+              Auto Paper Analysis
+            </span>
+          </div>
+          <p className="text-xs mb-3" style={{ color: 'var(--muted)', lineHeight: 1.5 }}>
+            When enabled, papers scoring above the threshold are automatically analyzed after each
+            Initialize / Track run. Uses abstract only — no full text, figures, or tables. Results
+            are less detailed than manual analysis with full paper content.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(experimentalFields).map(([fieldKey, meta]) => (
+              <FieldInput
+                key={fieldKey}
+                fieldKey={fieldKey}
+                meta={meta}
+                value={fieldKey in changes ? changes[fieldKey] : (meta.secret ? undefined : meta.value)}
+                onChange={handleChange}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AppSettings() {
   const queryClient = useQueryClient()
   const [changes, setChanges] = useState({})
@@ -978,6 +1046,8 @@ function AppSettings() {
                   <ScheduleEditor fields={fields} changes={changes} handleChange={handleChange} />
                 ) : catKey === 'email' ? (
                   <EmailSection fields={fields} changes={changes} handleChange={handleChange} />
+                ) : catKey === 'pipeline' ? (
+                  <PipelineSection fields={fields} changes={changes} handleChange={handleChange} />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {Object.entries(fields).map(([fieldKey, meta]) => (

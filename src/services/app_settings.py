@@ -31,6 +31,8 @@ SETTINGS_SCHEMA: dict[str, dict[str, Any]] = {
     "min_score_to_keep": {"default": "6", "type": "int", "category": "pipeline", "label": "Min Score to Keep", "desc": "Papers scored below this threshold are discarded after LLM scoring (Paper record kept, topic association removed)"},
     "currency": {"default": "CNY", "category": "pipeline", "label": "Currency", "desc": "Currency for cost display and budget (CNY, USD, EUR, GBP, JPY, KRW)"},
     "monthly_budget_cap": {"default": "30", "type": "float", "category": "pipeline", "label": "Monthly Budget Cap", "desc": "LLM calls stop when monthly cost reaches this limit"},
+    "auto_analysis_enabled": {"default": "false", "type": "bool", "category": "pipeline", "label": "Auto Analysis", "desc": "Automatically run LLM analysis on high-scoring papers after Initialize / Track"},
+    "auto_analysis_min_score": {"default": "7", "type": "int", "category": "pipeline", "label": "Auto Analysis Min Score", "desc": "Only auto-analyze papers with LLM score >= this threshold"},
 
     "output_language": {"default": "中文", "category": "prompts", "label": "Output Language", "desc": "Language for LLM-generated text (scoring reasons, digests, analysis)"},
     "prompt_batch_scoring_rubric": {"default": "", "type": "text", "category": "prompts", "label": "Scoring Criteria", "desc": "Customize the 1-10 scoring rubric and metadata signal weights"},

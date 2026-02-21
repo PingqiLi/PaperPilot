@@ -14,6 +14,7 @@ from ..models import Paper, PaperRuleSet, RuleSet, Run
 from . import app_settings
 from .arxiv import ArxivService
 from .batch_scorer import score_batch
+from .paper_analyzer import analyze_paper
 from .impact_scoring import compute_impact_score, is_survey_paper
 from .semantic_scholar import SemanticScholarService
 
@@ -219,6 +220,64 @@ async def _score_papers_concurrent(
         _update_run_progress(run_id, "scoring", papers_done, total)
 
     return scored_count
+
+
+async def _auto_analyze_papers(ruleset_id: int, run_id: int, db):
+    if not app_settings.get_bool("auto_analysis_enabled"):
+        return 0
+
+    min_score = app_settings.get_int("auto_analysis_min_score")
+    concurrency = app_settings.get_int("scoring_concurrency")
+
+    rows = db.query(Paper, PaperRuleSet).join(
+        PaperRuleSet, Paper.id == PaperRuleSet.paper_id
+    ).filter(
+        PaperRuleSet.ruleset_id == ruleset_id,
+        PaperRuleSet.is_scored == True,
+        PaperRuleSet.llm_score >= min_score,
+        PaperRuleSet.analyzed_at.is_(None),
+    ).all()
+
+    if not rows:
+        return 0
+
+    total = len(rows)
+    logger.info("Auto-analysis starting", ruleset_id=ruleset_id, count=total)
+    _update_run_progress(run_id, "auto_analysis", 0, total)
+
+    analyzed = 0
+    for i in range(0, total, concurrency):
+        group = rows[i:i + concurrency]
+        tasks = [
+            analyze_paper(
+                arxiv_id=str(paper.arxiv_id),
+                title=str(paper.title),
+                authors=list(paper.authors or []),
+                abstract=str(paper.abstract) if paper.abstract else None,
+                year=int(paper.year) if paper.year else None,
+                venue=str(paper.venue) if paper.venue else None,
+                citation_count=int(paper.citation_count or 0),
+                fetch_full_text=False,
+            )
+            for paper, assoc in group
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for (paper, assoc), result in zip(group, results):
+            if isinstance(result, Exception):
+                logger.error("Auto-analysis failed", arxiv_id=paper.arxiv_id, error=str(result))
+                continue
+            assoc.analysis = result
+            assoc.analyzed_at = datetime.utcnow()
+            analyzed += 1
+
+        db.commit()
+        done = min(i + len(group), total)
+        _update_run_progress(run_id, "auto_analysis", done, total)
+
+    logger.info("Auto-analysis done", ruleset_id=ruleset_id, analyzed=analyzed, total=total)
+    return analyzed
 
 
 async def _citation_snowball(
@@ -473,6 +532,8 @@ async def run_initialize(run_id: int, ruleset_id: int, task_id: int | None = Non
         if min_score > 1:
             removed = _remove_low_score_papers(db, ruleset_id, min_score)
             logger.info("Low-score cleanup", ruleset_id=ruleset_id, removed=removed, threshold=min_score)
+
+        await _auto_analyze_papers(ruleset_id, run_id, db)
 
         ruleset.is_initialized = True
         run.status = "completed"
@@ -791,6 +852,8 @@ async def run_track(run_id: int, ruleset_id: int, task_id: int | None = None):
         if track_min > 1:
             removed = _remove_low_score_papers(db, ruleset_id, track_min)
             logger.info("Track low-score cleanup", ruleset_id=ruleset_id, removed=removed, threshold=track_min)
+
+        await _auto_analyze_papers(ruleset_id, run_id, db)
 
         try:
             _auto_expand_keywords(db, ruleset_id)

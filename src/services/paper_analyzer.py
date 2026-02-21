@@ -97,9 +97,10 @@ async def analyze_paper(
     year: Optional[int],
     venue: Optional[str],
     citation_count: int,
+    fetch_full_text: bool = True,
 ) -> dict:
     full_text = None
-    if arxiv_id and not arxiv_id.startswith("s2:"):
+    if fetch_full_text and arxiv_id and not arxiv_id.startswith("s2:"):
         full_text = await _fetch_ar5iv(arxiv_id)
         if full_text:
             logger.info("ar5iv content fetched", arxiv_id=arxiv_id, chars=len(full_text))
