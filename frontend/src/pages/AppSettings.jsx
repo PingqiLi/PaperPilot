@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Key, Mail, Sliders, Clock, Check, AlertCircle, ChevronDown, ChevronRight, Bot, GraduationCap, Send, Loader2, History, XCircle, CheckCircle2, Sparkles, RotateCcw, FlaskConical } from 'lucide-react'
-import { getSettings, updateSettings, getEmailLogs, sendTestEmail, getPromptDefaults } from '../api/settings'
+import { Key, Mail, Sliders, Clock, Check, AlertCircle, ChevronDown, ChevronRight, Bot, GraduationCap, Send, Loader2, History, XCircle, CheckCircle2, Sparkles, FlaskConical } from 'lucide-react'
+import { getSettings, updateSettings, getEmailLogs, sendTestEmail } from '../api/settings'
 
 const SECTIONS = [
   { key: 'api', label: 'API Configuration', icon: Key },
@@ -19,41 +19,6 @@ const LANGUAGES = [
   { value: 'Français', label: 'Français' },
   { value: 'Español', label: 'Español' },
 ]
-
-const PROMPT_CARDS = [
-  { key: 'prompt_batch_scoring_rubric', label: 'Scoring Criteria', defaultKey: 'batch_scoring_rubric',
-    desc: 'Customize the 1-10 scoring rubric and metadata signal weights. Scoring behavior (JSON output format, survey control) is fixed.' },
-  { key: 'prompt_field_overview', label: 'Field Overview', defaultKey: 'field_overview',
-    desc: 'Customize rules for field overview generation. Role, JSON schema, and output format are fixed.', format: 'rules' },
-  { key: 'prompt_weekly_digest', label: 'Weekly Digest', defaultKey: 'weekly_digest',
-    desc: 'Customize rules for weekly digest generation. Role, JSON schema, and output format are fixed.', format: 'rules' },
-  { key: 'prompt_monthly_report', label: 'Monthly Report', defaultKey: 'monthly_report',
-    desc: 'Customize rules for monthly report generation. Role, JSON schema, and output format are fixed.', format: 'rules' },
-  { key: 'prompt_paper_analysis', label: 'Paper Analysis', defaultKey: 'paper_analysis',
-    desc: 'Customize field guidance for paper analysis. Role, JSON schema, and output format are fixed.', format: 'rules' },
-]
-
-function parseRules(text) {
-  if (!text) return []
-  return text.split('\n')
-    .filter(line => line.trim().startsWith('- '))
-    .map(line => {
-      const content = line.trim().slice(2)
-      const qm = content.match(/^"([^"]+)":\s*(.*)/)
-      if (qm) return { label: qm[1], value: qm[2], quoted: true }
-      const fm = content.match(/^([a-zA-Z][a-zA-Z0-9_. ]{0,30}):\s(.+)/)
-      if (fm) return { label: fm[1], value: fm[2], quoted: false }
-      return { label: null, value: content, quoted: false }
-    })
-}
-
-function rulesToText(rules) {
-  return rules.map(r => {
-    if (r.label && r.quoted) return `- "${r.label}": ${r.value}`
-    if (r.label) return `- ${r.label}: ${r.value}`
-    return `- ${r.value}`
-  }).join('\n')
-}
 
 const inputStyle = {
   background: 'var(--bg-elevated)',
@@ -550,174 +515,7 @@ function FieldInput({ fieldKey, meta, value, onChange }) {
   )
 }
 
-const textareaStyle = {
-  ...inputStyle,
-  fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-  fontSize: '12px',
-  lineHeight: '1.6',
-  minHeight: '200px',
-  resize: 'vertical',
-  whiteSpace: 'pre-wrap',
-  overflowWrap: 'break-word',
-}
-
-function RuleRow({ rule, index, onChange }) {
-  const ref = useCallback(el => {
-    if (el) {
-      el.style.height = 'auto'
-      el.style.height = Math.max(32, el.scrollHeight) + 'px'
-    }
-  }, [rule.value])
-
-  return (
-    <div className="flex gap-2 items-start">
-      {rule.label ? (
-        <span
-          className="text-[11px] font-mono font-medium px-2 py-1.5 rounded-md shrink-0 mt-px"
-          style={{
-            background: 'var(--accent-subtle)',
-            color: 'var(--accent)',
-            border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
-            lineHeight: '1.4',
-          }}
-        >
-          {rule.label}
-        </span>
-      ) : (
-        <div
-          className="w-1 rounded-full shrink-0 self-stretch mt-1 mb-1"
-          style={{ background: 'var(--accent)', opacity: 0.4 }}
-        />
-      )}
-      <textarea
-        ref={ref}
-        value={rule.value}
-        onChange={e => onChange(index, e.target.value)}
-        rows={1}
-        style={{
-          ...inputStyle,
-          fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-          fontSize: '12px',
-          lineHeight: '1.6',
-          padding: '6px 10px',
-          resize: 'none',
-          overflow: 'hidden',
-          minHeight: '32px',
-        }}
-        onInput={e => {
-          e.target.style.height = 'auto'
-          e.target.style.height = Math.max(32, e.target.scrollHeight) + 'px'
-        }}
-        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--accent-subtle)'}
-        onBlur={e => e.target.style.boxShadow = 'none'}
-      />
-    </div>
-  )
-}
-
-function PromptCard({ card, defaultText, savedValue, pendingValue, onChange }) {
-  const [open, setOpen] = useState(false)
-
-  const hasPending = pendingValue !== undefined
-  const effectiveValue = hasPending ? pendingValue : (savedValue || '')
-  const isCustomized = hasPending ? pendingValue !== '' : (savedValue && savedValue !== '')
-  const displayText = effectiveValue || defaultText || ''
-  const isRules = card.format === 'rules'
-  const rules = isRules ? parseRules(displayText) : []
-  const lineCount = isRules ? rules.length : (displayText ? displayText.split('\n').length : 0)
-
-  const handleRuleChange = (i, newValue) => {
-    const updated = rules.map((r, j) => j === i ? { ...r, value: newValue } : r)
-    onChange(card.key, rulesToText(updated))
-  }
-
-  return (
-    <div
-      className="rounded-lg border overflow-hidden"
-      style={{
-        borderColor: open ? 'var(--accent)' : 'var(--border)',
-        background: 'var(--bg-elevated)',
-        transition: 'border-color 0.15s',
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 p-4 cursor-pointer"
-        style={{ background: 'transparent', border: 'none', textAlign: 'left' }}
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
-              {card.label}
-            </span>
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-              style={{
-                background: isCustomized ? 'var(--accent-subtle)' : 'var(--bg-muted)',
-                color: isCustomized ? 'var(--accent)' : 'var(--muted)',
-              }}
-            >
-              {isCustomized ? 'Customized' : 'Default'}
-            </span>
-          </div>
-          <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
-            {card.desc}
-          </div>
-        </div>
-        {open
-          ? <ChevronDown size={16} style={{ color: 'var(--muted)', flexShrink: 0 }} />
-          : <ChevronRight size={16} style={{ color: 'var(--muted)', flexShrink: 0 }} />
-        }
-      </button>
-
-      {open && (
-        <div className="px-4 pb-4 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
-          {isRules ? (
-            <div className="space-y-2 mt-1">
-              {rules.map((rule, i) => (
-                <RuleRow key={i} rule={rule} index={i} onChange={handleRuleChange} />
-              ))}
-            </div>
-          ) : (
-            <textarea
-              value={displayText}
-              onChange={e => onChange(card.key, e.target.value)}
-              style={textareaStyle}
-              onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--accent-subtle)'}
-              onBlur={e => e.target.style.boxShadow = 'none'}
-            />
-          )}
-          <div className="flex items-center justify-between mt-2">
-            <div>
-              {isCustomized && (
-                <button
-                  type="button"
-                  onClick={() => onChange(card.key, '')}
-                  className="flex items-center gap-1 text-xs cursor-pointer"
-                  style={{ background: 'none', border: 'none', color: 'var(--muted)', padding: 0 }}
-                >
-                  <RotateCcw size={11} />
-                  Reset to Default
-                </button>
-              )}
-            </div>
-            <span className="text-[11px]" style={{ color: 'var(--muted)', opacity: 0.7 }}>
-              {isRules ? `${rules.length} rules` : `${lineCount} lines`}
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 function PromptSection({ fields, changes, handleChange }) {
-  const { data: defaults } = useQuery({
-    queryKey: ['promptDefaults'],
-    queryFn: getPromptDefaults,
-  })
-
   const getVal = (key) => key in changes ? changes[key] : (fields[key]?.value ?? '')
   const langVal = getVal('output_language')
   const isCustomLang = langVal && !LANGUAGES.some(l => l.value === langVal)
@@ -765,17 +563,17 @@ function PromptSection({ fields, changes, handleChange }) {
         </p>
       </div>
 
-      <div className="space-y-2">
-        {PROMPT_CARDS.map(card => (
-          <PromptCard
-            key={card.key}
-            card={card}
-            defaultText={defaults?.[card.defaultKey] || ''}
-            savedValue={fields[card.key]?.value || ''}
-            pendingValue={changes[card.key]}
-            onChange={handleChange}
-          />
-        ))}
+      <div
+        className="rounded-lg p-3"
+        style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}
+      >
+        <p className="text-xs" style={{ color: 'var(--muted)', lineHeight: 1.6 }}>
+          PaperPilot uses carefully tuned prompts for scoring, digests, and analysis.
+          Advanced users can customize prompts by editing files in <code
+            className="text-[11px] px-1 py-0.5 rounded"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-strong)' }}
+          >src/prompts/</code>
+        </p>
       </div>
     </div>
   )
