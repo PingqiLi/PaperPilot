@@ -24,14 +24,36 @@ const PROMPT_CARDS = [
   { key: 'prompt_batch_scoring_rubric', label: 'Scoring Criteria', defaultKey: 'batch_scoring_rubric',
     desc: 'Customize the 1-10 scoring rubric and metadata signal weights. Scoring behavior (JSON output format, survey control) is fixed.' },
   { key: 'prompt_field_overview', label: 'Field Overview', defaultKey: 'field_overview',
-    desc: 'Customize rules for field overview generation (pillar count, reading path, survey control). Role, JSON schema, and output format are fixed.' },
+    desc: 'Customize rules for field overview generation. Role, JSON schema, and output format are fixed.', format: 'rules' },
   { key: 'prompt_weekly_digest', label: 'Weekly Digest', defaultKey: 'weekly_digest',
-    desc: 'Customize rules for weekly digest generation (must_read criteria, trend signal policy). Role, JSON schema, and output format are fixed.' },
+    desc: 'Customize rules for weekly digest generation. Role, JSON schema, and output format are fixed.', format: 'rules' },
   { key: 'prompt_monthly_report', label: 'Monthly Report', defaultKey: 'monthly_report',
-    desc: 'Customize rules for monthly report generation (highlights, clusters, momentum). Role, JSON schema, and output format are fixed.' },
+    desc: 'Customize rules for monthly report generation. Role, JSON schema, and output format are fixed.', format: 'rules' },
   { key: 'prompt_paper_analysis', label: 'Paper Analysis', defaultKey: 'paper_analysis',
-    desc: 'Customize field guidance for paper analysis (innovations, experiments, limitations). Role, JSON schema, and output format are fixed.' },
+    desc: 'Customize field guidance for paper analysis. Role, JSON schema, and output format are fixed.', format: 'rules' },
 ]
+
+function parseRules(text) {
+  if (!text) return []
+  return text.split('\n')
+    .filter(line => line.trim().startsWith('- '))
+    .map(line => {
+      const content = line.trim().slice(2)
+      const qm = content.match(/^"([^"]+)":\s*(.*)/)
+      if (qm) return { label: qm[1], value: qm[2], quoted: true }
+      const fm = content.match(/^([a-zA-Z][a-zA-Z0-9_. ]{0,30}):\s(.+)/)
+      if (fm) return { label: fm[1], value: fm[2], quoted: false }
+      return { label: null, value: content, quoted: false }
+    })
+}
+
+function rulesToText(rules) {
+  return rules.map(r => {
+    if (r.label && r.quoted) return `- "${r.label}": ${r.value}`
+    if (r.label) return `- ${r.label}: ${r.value}`
+    return `- ${r.value}`
+  }).join('\n')
+}
 
 const inputStyle = {
   background: 'var(--bg-elevated)',
@@ -539,6 +561,60 @@ const textareaStyle = {
   overflowWrap: 'break-word',
 }
 
+function RuleRow({ rule, index, onChange }) {
+  const ref = useCallback(el => {
+    if (el) {
+      el.style.height = 'auto'
+      el.style.height = Math.max(32, el.scrollHeight) + 'px'
+    }
+  }, [rule.value])
+
+  return (
+    <div className="flex gap-2 items-start">
+      {rule.label ? (
+        <span
+          className="text-[11px] font-mono font-medium px-2 py-1.5 rounded-md shrink-0 mt-px"
+          style={{
+            background: 'var(--accent-subtle)',
+            color: 'var(--accent)',
+            border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+            lineHeight: '1.4',
+          }}
+        >
+          {rule.label}
+        </span>
+      ) : (
+        <div
+          className="w-1 rounded-full shrink-0 self-stretch mt-1 mb-1"
+          style={{ background: 'var(--accent)', opacity: 0.4 }}
+        />
+      )}
+      <textarea
+        ref={ref}
+        value={rule.value}
+        onChange={e => onChange(index, e.target.value)}
+        rows={1}
+        style={{
+          ...inputStyle,
+          fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
+          fontSize: '12px',
+          lineHeight: '1.6',
+          padding: '6px 10px',
+          resize: 'none',
+          overflow: 'hidden',
+          minHeight: '32px',
+        }}
+        onInput={e => {
+          e.target.style.height = 'auto'
+          e.target.style.height = Math.max(32, e.target.scrollHeight) + 'px'
+        }}
+        onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--accent-subtle)'}
+        onBlur={e => e.target.style.boxShadow = 'none'}
+      />
+    </div>
+  )
+}
+
 function PromptCard({ card, defaultText, savedValue, pendingValue, onChange }) {
   const [open, setOpen] = useState(false)
 
@@ -546,7 +622,14 @@ function PromptCard({ card, defaultText, savedValue, pendingValue, onChange }) {
   const effectiveValue = hasPending ? pendingValue : (savedValue || '')
   const isCustomized = hasPending ? pendingValue !== '' : (savedValue && savedValue !== '')
   const displayText = effectiveValue || defaultText || ''
-  const lineCount = displayText ? displayText.split('\n').length : 0
+  const isRules = card.format === 'rules'
+  const rules = isRules ? parseRules(displayText) : []
+  const lineCount = isRules ? rules.length : (displayText ? displayText.split('\n').length : 0)
+
+  const handleRuleChange = (i, newValue) => {
+    const updated = rules.map((r, j) => j === i ? { ...r, value: newValue } : r)
+    onChange(card.key, rulesToText(updated))
+  }
 
   return (
     <div
@@ -590,13 +673,21 @@ function PromptCard({ card, defaultText, savedValue, pendingValue, onChange }) {
 
       {open && (
         <div className="px-4 pb-4 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
-          <textarea
-            value={displayText}
-            onChange={e => onChange(card.key, e.target.value)}
-            style={textareaStyle}
-            onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--accent-subtle)'}
-            onBlur={e => e.target.style.boxShadow = 'none'}
-          />
+          {isRules ? (
+            <div className="space-y-2 mt-1">
+              {rules.map((rule, i) => (
+                <RuleRow key={i} rule={rule} index={i} onChange={handleRuleChange} />
+              ))}
+            </div>
+          ) : (
+            <textarea
+              value={displayText}
+              onChange={e => onChange(card.key, e.target.value)}
+              style={textareaStyle}
+              onFocus={e => e.target.style.boxShadow = '0 0 0 2px var(--accent-subtle)'}
+              onBlur={e => e.target.style.boxShadow = 'none'}
+            />
+          )}
           <div className="flex items-center justify-between mt-2">
             <div>
               {isCustomized && (
@@ -612,7 +703,7 @@ function PromptCard({ card, defaultText, savedValue, pendingValue, onChange }) {
               )}
             </div>
             <span className="text-[11px]" style={{ color: 'var(--muted)', opacity: 0.7 }}>
-              {lineCount} lines
+              {isRules ? `${rules.length} rules` : `${lineCount} lines`}
             </span>
           </div>
         </div>
