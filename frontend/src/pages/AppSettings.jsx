@@ -24,13 +24,13 @@ const PROMPT_CARDS = [
   { key: 'prompt_batch_scoring_rubric', label: 'Scoring Criteria', defaultKey: 'batch_scoring_rubric',
     desc: 'Customize the 1-10 scoring rubric and metadata signal weights. Scoring behavior (JSON output format, survey control) is fixed.' },
   { key: 'prompt_field_overview', label: 'Field Overview', defaultKey: 'field_overview',
-    desc: 'Prompt for generating field overview digests' },
+    desc: 'Customize rules for field overview generation (pillar count, reading path, survey control). Role, JSON schema, and output format are fixed.' },
   { key: 'prompt_weekly_digest', label: 'Weekly Digest', defaultKey: 'weekly_digest',
-    desc: 'Prompt for generating weekly research digests' },
+    desc: 'Customize rules for weekly digest generation (must_read criteria, trend signal policy). Role, JSON schema, and output format are fixed.' },
   { key: 'prompt_monthly_report', label: 'Monthly Report', defaultKey: 'monthly_report',
-    desc: 'Prompt for generating monthly trend reports' },
+    desc: 'Customize rules for monthly report generation (highlights, clusters, momentum). Role, JSON schema, and output format are fixed.' },
   { key: 'prompt_paper_analysis', label: 'Paper Analysis', defaultKey: 'paper_analysis',
-    desc: 'Prompt for generating deep-dive paper analysis' },
+    desc: 'Customize field guidance for paper analysis (innovations, experiments, limitations). Role, JSON schema, and output format are fixed.' },
 ]
 
 const inputStyle = {

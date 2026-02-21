@@ -27,11 +27,43 @@ def load_prompt(filename: str) -> str:
         return f.read().strip()
 
 
+_PROMPT_SECTIONS = {
+    "field_overview": {"delimiter": "Rules:\n"},
+    "weekly_digest": {"delimiter": "Rules:\n"},
+    "monthly_report": {"delimiter": "Rules:\n"},
+    "paper_analysis": {"delimiter": "Field guidance:\n", "suffix": "\nPaper to analyze:\n"},
+}
+
+
+def get_default_custom_section(name: str) -> str:
+    spec = _PROMPT_SECTIONS.get(name)
+    if not spec:
+        return load_prompt(f"{name}.md")
+    full = load_prompt(f"{name}.md")
+    delimiter = spec["delimiter"]
+    if delimiter not in full:
+        return full
+    _, after = full.split(delimiter, 1)
+    suffix = spec.get("suffix")
+    if suffix and after.endswith(suffix.strip()):
+        after = after[: -len(suffix.strip())].rstrip()
+    return after.strip()
+
+
 def get_prompt(name: str) -> str:
     custom = app_settings.get(f"prompt_{name}")
-    if custom:
-        return custom
-    return load_prompt(f"{name}.md")
+    spec = _PROMPT_SECTIONS.get(name)
+    if not spec:
+        return custom if custom else load_prompt(f"{name}.md")
+    if not custom:
+        return load_prompt(f"{name}.md")
+    full = load_prompt(f"{name}.md")
+    delimiter = spec["delimiter"]
+    if delimiter not in full:
+        return full
+    prefix = full.split(delimiter, 1)[0]
+    suffix = spec.get("suffix", "")
+    return prefix + delimiter + custom.strip() + "\n" + suffix
 
 
 def _clean_json_response(text: str) -> str:
@@ -92,8 +124,9 @@ class LLMClient:
         if now - self._budget_ts < 10 and self._budget_cache is not None:
             cap = app_settings.get_float("monthly_budget_cap")
             if cap > 0 and self._budget_cache >= cap:
+                currency = app_settings.get("currency")
                 raise BudgetExceededError(
-                    f"月度预算已用完 ({self._budget_cache:.2f}/{cap:.2f} CNY)，LLM 调用已暂停"
+                    f"月度预算已用完 ({self._budget_cache:.2f}/{cap:.2f} {currency})，LLM 调用已暂停"
                 )
             return
         cap = app_settings.get_float("monthly_budget_cap")
@@ -111,8 +144,9 @@ class LLMClient:
         except Exception:
             return
         if self._budget_cache >= cap:
+            currency = app_settings.get("currency")
             raise BudgetExceededError(
-                f"月度预算已用完 ({self._budget_cache:.2f}/{cap:.2f} CNY)，LLM 调用已暂停"
+                f"月度预算已用完 ({self._budget_cache:.2f}/{cap:.2f} {currency})，LLM 调用已暂停"
             )
 
     @retry(

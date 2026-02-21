@@ -9,7 +9,7 @@ from ..models.email_log import EmailLog
 from ..services import app_settings
 from ..services.batch_scorer import DEFAULT_SCORING_RUBRIC
 from ..services.email_service import send_digest
-from ..services.llm_client import load_prompt
+from ..services.llm_client import load_prompt, get_default_custom_section
 
 logger = structlog.get_logger(__name__)
 
@@ -36,10 +36,10 @@ def update_settings(data: dict[str, Any]):
 def get_prompt_defaults():
     return {
         "batch_scoring_rubric": DEFAULT_SCORING_RUBRIC,
-        "field_overview": load_prompt("field_overview.md"),
-        "weekly_digest": load_prompt("weekly_digest.md"),
-        "monthly_report": load_prompt("monthly_report.md"),
-        "paper_analysis": load_prompt("paper_analysis.md"),
+        "field_overview": get_default_custom_section("field_overview"),
+        "weekly_digest": get_default_custom_section("weekly_digest"),
+        "monthly_report": get_default_custom_section("monthly_report"),
+        "paper_analysis": get_default_custom_section("paper_analysis"),
     }
 
 

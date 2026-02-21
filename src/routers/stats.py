@@ -43,7 +43,7 @@ def get_cost_stats(db: Session = Depends(get_db)):
         "monthly_cost": monthly_cost,
         "monthly_budget": monthly_budget,
         "budget_usage_pct": round(monthly_cost / monthly_budget * 100, 1) if monthly_budget > 0 else 0,
-        "currency": "CNY",
+        "currency": app_settings.get("currency"),
     }
 
 

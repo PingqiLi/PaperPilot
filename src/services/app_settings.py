@@ -8,8 +8,8 @@ SETTINGS_SCHEMA: dict[str, dict[str, Any]] = {
     "llm_api_key": {"default": "", "secret": True, "category": "api", "label": "LLM API Key"},
     "llm_base_url": {"default": "https://dashscope.aliyuncs.com/compatible-mode/v1", "category": "api", "label": "LLM Base URL"},
     "llm_model": {"default": "qwen3.5-plus", "category": "api", "label": "LLM Model"},
-    "llm_price_input": {"default": "0.8", "type": "float", "category": "api", "label": "Input Price (CNY/M tokens)"},
-    "llm_price_output": {"default": "4.8", "type": "float", "category": "api", "label": "Output Price (CNY/M tokens)"},
+    "llm_price_input": {"default": "0.8", "type": "float", "category": "api", "label": "Input Price (per M tokens)"},
+    "llm_price_output": {"default": "4.8", "type": "float", "category": "api", "label": "Output Price (per M tokens)"},
     "s2_api_key": {"default": "", "secret": True, "category": "api", "label": "Semantic Scholar API Key"},
 
     "smtp_host": {"default": "", "category": "email", "label": "SMTP Host", "desc": "e.g. smtp.gmail.com"},
@@ -29,7 +29,8 @@ SETTINGS_SCHEMA: dict[str, dict[str, Any]] = {
     "scoring_batch_size": {"default": "10", "type": "int", "category": "pipeline", "label": "Scoring Batch Size", "desc": "Papers per LLM scoring call (max ~15, higher = fewer calls)"},
     "scoring_concurrency": {"default": "5", "type": "int", "category": "pipeline", "label": "Scoring Concurrency", "desc": "Parallel LLM scoring calls (higher = faster init, more API pressure)"},
     "min_score_to_keep": {"default": "6", "type": "int", "category": "pipeline", "label": "Min Score to Keep", "desc": "Papers scored below this threshold are discarded after LLM scoring (Paper record kept, topic association removed)"},
-    "monthly_budget_cap": {"default": "30", "type": "float", "category": "pipeline", "label": "Monthly Budget Cap (CNY)", "desc": "LLM calls stop when monthly cost reaches this limit"},
+    "currency": {"default": "CNY", "category": "pipeline", "label": "Currency", "desc": "Currency for cost display and budget (CNY, USD, EUR, GBP, JPY, KRW)"},
+    "monthly_budget_cap": {"default": "30", "type": "float", "category": "pipeline", "label": "Monthly Budget Cap", "desc": "LLM calls stop when monthly cost reaches this limit"},
 
     "output_language": {"default": "中文", "category": "prompts", "label": "Output Language", "desc": "Language for LLM-generated text (scoring reasons, digests, analysis)"},
     "prompt_batch_scoring_rubric": {"default": "", "type": "text", "category": "prompts", "label": "Scoring Criteria", "desc": "Customize the 1-10 scoring rubric and metadata signal weights"},

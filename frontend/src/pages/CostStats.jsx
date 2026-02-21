@@ -23,6 +23,10 @@ const CHART_MODES = [
   { label: 'Tokens', key: 'tokens' },
 ]
 
+const CURRENCY_SYMBOLS = {
+  CNY: '¥', USD: '$', EUR: '€', GBP: '£', JPY: '¥', KRW: '₩',
+}
+
 const MODEL_COLORS = [
   '#6366f1',
   '#22c55e',
@@ -62,7 +66,7 @@ function PillToggle({ options, value, onChange }) {
   )
 }
 
-function CustomTooltip({ active, payload, label, chartMode }) {
+function CustomTooltip({ active, payload, label, chartMode, currencySymbol = '¥' }) {
   if (!active || !payload?.length) return null
   return (
     <div
@@ -85,7 +89,7 @@ function CustomTooltip({ active, payload, label, chartMode }) {
           <span style={{ color: 'var(--muted)' }}>{entry.name}:</span>
           <span style={{ color: 'var(--text-strong)' }}>
             {chartMode === 'cost'
-              ? `¥${entry.value.toFixed(4)}`
+              ? `${currencySymbol}${entry.value.toFixed(4)}`
               : entry.value.toLocaleString()}
           </span>
         </div>
@@ -133,6 +137,8 @@ function CostStats() {
     queryFn: () => getRequestHistory({ page: reqPage, page_size: pageSize, days }),
   })
 
+  const currency = summary?.currency || 'CNY'
+  const cs = CURRENCY_SYMBOLS[currency] || currency
   const { chartData, models } = aggregateChartData(dailyRaw, chartMode)
   const totalPages = reqData ? Math.ceil(reqData.total / pageSize) : 0
 
@@ -147,7 +153,7 @@ function CostStats() {
           Cost Stats
         </h1>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          LLM API usage and cost tracking (CNY)
+          LLM API usage and cost tracking ({currency})
         </p>
       </div>
 
@@ -179,7 +185,7 @@ function CostStats() {
                 Total Cost
               </p>
               <p className="text-lg font-semibold" style={{ color: 'var(--text-strong)' }}>
-                ¥{(summary?.total_cost || 0).toFixed(4)}
+                {cs}{(summary?.total_cost || 0).toFixed(4)}
               </p>
             </div>
           </div>
@@ -216,7 +222,7 @@ function CostStats() {
               Monthly Budget
             </span>
             <span className="text-xs" style={{ color: 'var(--muted)' }}>
-              ¥{summary.monthly_cost.toFixed(2)} / ¥{summary.monthly_budget.toFixed(0)}
+              {cs}{summary.monthly_cost.toFixed(2)} / {cs}{summary.monthly_budget.toFixed(0)}
               <span className="ml-2" style={{
                 color: summary.budget_usage_pct >= 90 ? 'var(--danger, #ef4444)' :
                        summary.budget_usage_pct >= 70 ? '#f59e0b' : 'var(--accent)'
@@ -323,13 +329,13 @@ function CostStats() {
                 width={50}
                 tickFormatter={v =>
                   chartMode === 'cost'
-                    ? `¥${v}`
+                    ? `${cs}${v}`
                     : v >= 1000
                       ? `${(v / 1000).toFixed(0)}k`
                       : v
                 }
               />
-              <Tooltip content={<CustomTooltip chartMode={chartMode} />} />
+              <Tooltip content={<CustomTooltip chartMode={chartMode} currencySymbol={cs} />} />
               {models.map((model, i) => (
                 <Area
                   key={model}
@@ -445,7 +451,7 @@ function CostStats() {
                       className="px-5 py-2.5 font-mono"
                       style={{ color: 'var(--text-strong)' }}
                     >
-                      ¥{item.cost.toFixed(4)}
+                      {cs}{item.cost.toFixed(4)}
                     </td>
                   </tr>
                 ))}
