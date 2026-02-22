@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Sparkles, Save, ArrowLeft, Loader2, X, Plus } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Sparkles, Save, ArrowLeft, Loader2, X, Plus, CheckCircle2 } from 'lucide-react'
 import { generateDraft, createRuleset, createRun } from '../api/rulesets'
+import { getTask } from '../api/tasks'
 import { useTasks } from '../contexts/TaskContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LlmLoadingBanner from '../components/LlmLoadingBanner'
@@ -77,31 +78,64 @@ function TagInput({ tags, onChange, placeholder }) {
 
 function RuleSetWizard() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useLanguage()
   const queryClient = useQueryClient()
   const { addToast } = useTasks()
-  const [step, setStep] = useState('topic')
+
+  const reviewTaskId = searchParams.get('taskId') ? Number(searchParams.get('taskId')) : null
+  const [step, setStep] = useState(reviewTaskId ? 'loading' : 'topic')
   const [topicSentence, setTopicSentence] = useState('')
   const [draft, setDraft] = useState(null)
+  const [submitted, setSubmitted] = useState(false)
+
+  const { data: taskData } = useQuery({
+    queryKey: ['draftTask', reviewTaskId],
+    queryFn: () => getTask(reviewTaskId),
+    refetchInterval: (query) => {
+      const s = query.state.data?.status
+      return s === 'running' ? 2000 : false
+    },
+    enabled: !!reviewTaskId,
+  })
+
+  useEffect(() => {
+    if (!taskData || !reviewTaskId) return
+    if (taskData.status === 'awaiting_approval' && taskData.result) {
+      setDraft(taskData.result)
+      setStep('review')
+    } else if (taskData.status === 'running') {
+      setStep('loading')
+    } else if (taskData.status === 'failed') {
+      setStep('topic')
+      setSearchParams({}, { replace: true })
+    }
+  }, [taskData, reviewTaskId, setSearchParams])
 
   const draftMutation = useMutation({
     mutationFn: () => generateDraft(topicSentence),
     onSuccess: (data) => {
-      setDraft(data)
-      setStep('review')
+      setSubmitted(true)
+      setTopicSentence('')
+      queryClient.invalidateQueries({ queryKey: ['activeTasks'] })
+      queryClient.invalidateQueries({ queryKey: ['allTasks'] })
+      addToast({ id: data.task_id, title: t('ruleSet.wizard.draftSubmitted') })
+      setTimeout(() => setSubmitted(false), 3000)
     },
   })
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       const rs = await createRuleset(draft)
-      const run = await createRun(rs.id, 'initialize')
+      const run = await createRun(rs.id, 'initialize', { taskId: draft.task_id })
       return { rs, run }
     },
-    onSuccess: ({ rs, run }) => {
+    onSuccess: ({ rs }) => {
+      setSearchParams({}, { replace: true })
       queryClient.invalidateQueries({ queryKey: ['rulesets'] })
       queryClient.invalidateQueries({ queryKey: ['topicOverview'] })
-      addToast({ id: run.task_id || Date.now(), title: `Initializing "${rs.name}"...`, taskId: run.task_id })
+      queryClient.invalidateQueries({ queryKey: ['activeTasks'] })
+      queryClient.invalidateQueries({ queryKey: ['allTasks'] })
       navigate(`/topics/${rs.id}`)
     },
   })
@@ -176,12 +210,13 @@ function RuleSetWizard() {
               {draftMutation.isPending ? t('ruleSet.wizard.generating') : t('ruleSet.wizard.generateDraft')}
             </button>
           </div>
-          {draftMutation.isPending && (
-            <div className="mt-4">
-              <LlmLoadingBanner
-                message={t('ruleSet.wizard.loadingGenerateMsg')}
-                detail={t('ruleSet.wizard.loadingGenerateDetail')}
-              />
+          {submitted && (
+            <div
+              className="flex items-center gap-2 p-3 rounded-lg mt-4"
+              style={{ background: 'var(--ok-subtle)', color: 'var(--ok)' }}
+            >
+              <CheckCircle2 size={16} />
+              <span className="text-sm">{t('ruleSet.wizard.draftSubmitted')}</span>
             </div>
           )}
           {draftMutation.isError && (
@@ -191,6 +226,28 @@ function RuleSetWizard() {
             >
               <span className="text-sm" style={{ color: 'var(--danger)' }}>
                 {t('ruleSet.wizard.failedGenerate').replace('{error}', draftMutation.error?.response?.data?.detail || draftMutation.error?.message || 'Please try again.')}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 'loading' && (
+        <div
+          className="p-6 rounded-xl border"
+          style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
+        >
+          <LlmLoadingBanner
+            message={t('ruleSet.wizard.loadingGenerateMsg')}
+            detail={t('ruleSet.wizard.loadingGenerateDetail')}
+          />
+          {taskData?.status === 'failed' && (
+            <div
+              className="flex items-center gap-3 p-4 rounded-xl border mt-4"
+              style={{ background: 'var(--danger-subtle)', borderColor: 'var(--danger)' }}
+            >
+              <span className="text-sm" style={{ color: 'var(--danger)' }}>
+                {t('ruleSet.wizard.failedGenerate').replace('{error}', taskData.error || '')}
               </span>
             </div>
           )}
@@ -343,7 +400,7 @@ function RuleSetWizard() {
 
           <div className="flex items-center gap-3 justify-end">
             <button
-              onClick={() => setStep('topic')}
+              onClick={() => { setStep('topic'); setDraft(null); setSearchParams({}, { replace: true }) }}
               className="px-4 py-2 rounded-lg text-sm cursor-pointer"
               style={{
                 background: 'transparent',

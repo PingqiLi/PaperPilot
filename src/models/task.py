@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import Column, DateTime, Integer, String, Text, JSON
 
 from .paper import Base
 
@@ -20,5 +20,6 @@ class Task(Base):
     digest_type = Column(String(30))
 
     error = Column(Text)
+    result = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)

@@ -6,10 +6,10 @@ import { useLanguage } from '../contexts/LanguageContext'
 
 const SECTIONS = [
   { key: 'api', labelKey: 'settings.api', icon: Key },
-  { key: 'email', labelKey: 'settings.email', icon: Mail },
-  { key: 'pipeline', labelKey: 'settings.pipeline', icon: Sliders },
   { key: 'language', labelKey: 'settings.language', icon: Globe },
+  { key: 'pipeline', labelKey: 'settings.pipeline', icon: Sliders },
   { key: 'schedule', labelKey: 'settings.schedule', icon: Clock },
+  { key: 'email', labelKey: 'settings.email', icon: Mail },
 ]
 
 const LANGUAGES = [

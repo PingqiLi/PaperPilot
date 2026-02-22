@@ -24,6 +24,7 @@ class TaskResponse(BaseModel):
     digest_id: Optional[int] = None
     digest_type: Optional[str] = None
     error: Optional[str] = None
+    result: Optional[dict[str, Any]] = None
     progress: Optional[dict[str, Any]] = None
     created_at: datetime
     completed_at: Optional[datetime] = None

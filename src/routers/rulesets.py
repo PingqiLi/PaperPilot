@@ -23,7 +23,6 @@ from ..schemas.paper import (
     PaperWithScore,
     RuleSetCreate,
     RuleSetDraftRequest,
-    RuleSetDraftResponse,
     RuleSetResponse,
     RuleSetUpdate,
     RunCreate,
@@ -43,22 +42,26 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1/rulesets", tags=["rulesets"])
 
 
-@router.post("/draft", response_model=RuleSetDraftResponse)
-async def create_draft(req: RuleSetDraftRequest):
+class DraftStartResponse(BaseModel):
+    task_id: int
+
+
+@router.post("/draft", response_model=DraftStartResponse)
+async def create_draft(req: RuleSetDraftRequest, background_tasks: BackgroundTasks):
     preview = req.topic_sentence[:60] + ("..." if len(req.topic_sentence) > 60 else "")
     task = create_task("topic_init", f"New Topic: {preview}", status="running")
+    background_tasks.add_task(_run_draft_generation, task.id, req.topic_sentence)
+    return DraftStartResponse(task_id=task.id)
+
+
+async def _run_draft_generation(task_id: int, topic_sentence: str):
     try:
-        draft = await generate_draft(req.topic_sentence)
-        update_task(task.id, status="awaiting_approval")
-        draft.task_id = task.id
-        return draft
-    except ValueError as e:
-        fail_task(task.id, str(e))
-        raise HTTPException(status_code=502, detail=str(e))
+        draft = await generate_draft(topic_sentence)
+        draft["task_id"] = task_id
+        update_task(task_id, status="awaiting_approval", result=draft)
     except Exception as e:
-        fail_task(task.id, str(e))
-        logger.error("Draft generation endpoint failed", error=str(e))
-        raise HTTPException(status_code=502, detail=f"LLM服务异常: {str(e)}")
+        fail_task(task_id, str(e))
+        logger.error("Draft generation failed", task_id=task_id, error=str(e))
 
 
 @router.get("", response_model=List[RuleSetResponse])

@@ -45,8 +45,10 @@ export async function getReinitPreview(rulesetId) {
   return data
 }
 
-export async function createRun(rulesetId, runType, { reinit = false } = {}) {
-  const { data } = await api.post(`/rulesets/${rulesetId}/runs`, { run_type: runType, reinit })
+export async function createRun(rulesetId, runType, { reinit = false, taskId = null } = {}) {
+  const payload = { run_type: runType, reinit }
+  if (taskId) payload.task_id = taskId
+  const { data } = await api.post(`/rulesets/${rulesetId}/runs`, payload)
   return data
 }
 

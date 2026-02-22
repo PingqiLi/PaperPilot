@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Loader2, CheckCircle2, XCircle, Clock, AlertCircle,
-  ArrowRight, ChevronDown, ChevronUp, ListTodo,
+  Loader2, CheckCircle2, XCircle, AlertCircle,
+  ArrowRight, ChevronDown, ChevronUp, ListTodo, Pencil,
 } from 'lucide-react'
 import { getTasks } from '../api/tasks'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -20,7 +20,7 @@ function StatusIcon({ status }) {
     return <Loader2 size={14} className="animate-spin" style={{ color: 'var(--accent)' }} />
   }
   if (status === 'awaiting_approval') {
-    return <Clock size={14} style={{ color: 'var(--warn)' }} />
+    return <Pencil size={14} style={{ color: 'var(--warn)' }} />
   }
   if (status === 'completed') {
     return <CheckCircle2 size={14} style={{ color: 'var(--ok)' }} />
@@ -53,6 +53,9 @@ function StatusLabel({ status }) {
 }
 
 function getNavTarget(task) {
+  if (task.task_type === 'topic_init' && !task.ruleset_id) {
+    return `/topics/new?taskId=${task.id}`
+  }
   if (!task.ruleset_id) return null
   if (task.task_type === 'paper_analysis' && task.paper_id) {
     return `/topics/${task.ruleset_id}/papers/${task.paper_id}`
@@ -60,9 +63,14 @@ function getNavTarget(task) {
   return `/topics/${task.ruleset_id}`
 }
 
+function parseUTC(dateStr) {
+  if (!dateStr) return null
+  return new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z')
+}
+
 function formatElapsed(createdAt, completedAt) {
-  const start = new Date(createdAt).getTime()
-  const end = completedAt ? new Date(completedAt).getTime() : Date.now()
+  const start = parseUTC(createdAt).getTime()
+  const end = completedAt ? parseUTC(completedAt).getTime() : Date.now()
   const diff = Math.max(0, Math.floor((end - start) / 1000))
   if (diff < 60) return `${diff}s`
   const min = Math.floor(diff / 60)
@@ -73,10 +81,40 @@ function formatElapsed(createdAt, completedAt) {
 }
 
 function formatTime(dateStr) {
-  const d = new Date(dateStr)
+  const d = parseUTC(dateStr)
   return d.toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
+}
+
+function ElapsedTicker({ createdAt }) {
+  const [, setTick] = useState(0)
+
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  return (
+    <span className="text-xs font-mono tabular-nums" style={{ color: 'var(--muted)' }}>
+      {formatElapsed(createdAt)}
+    </span>
+  )
+}
+
+function ProgressStage({ stage, t }) {
+  const stageLabels = {
+    searching: t('tasks.stage.searching'),
+    scoring: t('tasks.stage.scoring'),
+    method_search: t('tasks.stage.methodSearch'),
+    arxiv_search: t('tasks.stage.arxivSearch'),
+    ranking: t('tasks.stage.ranking'),
+    citation_discovery: t('tasks.stage.citationDiscovery'),
+    citation_scoring: t('tasks.stage.citationScoring'),
+    auto_analysis: t('tasks.stage.autoAnalysis'),
+    done: t('tasks.stage.done'),
+  }
+  return <span>{stageLabels[stage] || stage}</span>
 }
 
 function TaskRow({ task }) {
@@ -92,15 +130,17 @@ function TaskRow({ task }) {
     paper_analysis: t('tasks.type.analysis'),
   }
   const isActive = task.status === 'running' || task.status === 'awaiting_approval'
+  const isAwaiting = task.status === 'awaiting_approval'
+  const accentColor = isAwaiting ? 'var(--warn)' : 'var(--accent)'
 
   return (
     <div
       className="p-4 rounded-xl border transition-all"
       style={{
         background: 'var(--card)',
-        borderColor: isActive ? 'var(--accent)' : 'var(--border)',
+        borderColor: isActive ? accentColor : 'var(--border)',
         borderLeftWidth: isActive ? 3 : 1,
-        borderLeftColor: isActive ? 'var(--accent)' : undefined,
+        borderLeftColor: isActive ? accentColor : undefined,
       }}
     >
       <div className="flex items-center gap-3">
@@ -115,9 +155,17 @@ function TaskRow({ task }) {
           {task.title}
         </span>
         <StatusLabel status={task.status} />
-        <span className="text-xs font-mono tabular-nums" style={{ color: 'var(--muted)' }}>
-          {isActive ? formatElapsed(task.created_at) : formatTime(task.created_at)}
-        </span>
+        {isActive ? (
+          <ElapsedTicker createdAt={task.created_at} />
+        ) : task.completed_at ? (
+          <span className="text-xs font-mono tabular-nums" style={{ color: 'var(--muted)' }}>
+            {formatElapsed(task.created_at, task.completed_at)}
+          </span>
+        ) : (
+          <span className="text-xs font-mono tabular-nums" style={{ color: 'var(--muted)' }}>
+            {formatTime(task.created_at)}
+          </span>
+        )}
         {task.status === 'failed' && task.error && (
           <button
             onClick={() => setShowError(v => !v)}
@@ -133,24 +181,25 @@ function TaskRow({ task }) {
             className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs cursor-pointer"
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
           >
-            {t('tasks.view')} <ArrowRight size={11} />
+            {isAwaiting ? t('tasks.continue') : t('tasks.view')} <ArrowRight size={11} />
           </button>
         )}
       </div>
+
       {task.progress && task.status === 'running' && (
         <div className="mt-2.5 ml-[26px]">
           <div className="flex items-center gap-2 text-xs mb-1" style={{ color: 'var(--muted)' }}>
-            <span>{task.progress.stage}</span>
+            <ProgressStage stage={task.progress.stage} t={t} />
             {task.progress.done != null && task.progress.total != null && (
-              <span>{task.progress.done}/{task.progress.total}</span>
+              <span className="font-mono tabular-nums">{task.progress.done}/{task.progress.total}</span>
             )}
           </div>
-          <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
             <div
-              className="h-full rounded-full transition-all duration-300"
+              className="h-full rounded-full transition-all duration-500"
               style={{
                 width: task.progress.total > 0
-                  ? `${Math.round((task.progress.done / task.progress.total) * 100)}%`
+                  ? `${Math.min(Math.round((task.progress.done / task.progress.total) * 100), 100)}%`
                   : '0%',
                 background: 'var(--accent)',
               }}
@@ -158,6 +207,15 @@ function TaskRow({ task }) {
           </div>
         </div>
       )}
+
+      {isAwaiting && (
+        <div className="mt-2 ml-[26px]">
+          <span className="text-xs" style={{ color: 'var(--warn)' }}>
+            {t('tasks.awaitingHint')}
+          </span>
+        </div>
+      )}
+
       {showError && task.error && (
         <div
           className="mt-2.5 ml-[26px] p-2.5 rounded-lg text-xs"
@@ -183,16 +241,28 @@ function Tasks() {
   })
 
   const tasks = data?.items || []
+  const activeCount = tasks.filter(t => t.status === 'running' || t.status === 'awaiting_approval').length
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-strong)' }}>
-          {t('tasks.title')}
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-          {t('tasks.subtitle')}
-        </p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-strong)' }}>
+            {t('tasks.title')}
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+            {t('tasks.subtitle')}
+          </p>
+        </div>
+        {activeCount > 0 && (
+          <span
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+            style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}
+          >
+            <Loader2 size={12} className="animate-spin" />
+            {t('tasks.activeCount').replace('{n}', activeCount)}
+          </span>
+        )}
       </div>
 
       {isLoading ? (
