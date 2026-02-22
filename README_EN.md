@@ -67,7 +67,7 @@ All settings can be managed in the **Settings** page of the WebUI:
 
 ## Pipeline
 
-<img src="docs/pipeline.png" alt="PaperPilot Pipeline" width="900">
+<img src="docs/pipeline_en.png" alt="PaperPilot Pipeline" width="900">
 
 **Initialize** builds a foundational paper library from scratch: LLM generates topic config → S2 semantic search + method-specific search + ArXiv boolean search → deduplication → Impact Score ranking → Shortlist Top-N → LLM batch scoring → citation snowballing (score ≥ 8) → remove low-scored papers
 
