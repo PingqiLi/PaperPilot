@@ -1328,14 +1328,16 @@ function RuleSetDashboard() {
       </div>
 
       {activeRunId && (
-        <RunProgress
-          rulesetId={id}
-          runId={activeRunId}
-          onComplete={() => {
-            queryClient.invalidateQueries({ queryKey: ['ruleset', id] })
-            queryClient.invalidateQueries({ queryKey: ['rulesetPapers', id] })
-          }}
-        />
+        <div className="mb-4">
+          <RunProgress
+            rulesetId={id}
+            runId={activeRunId}
+            onComplete={() => {
+              queryClient.invalidateQueries({ queryKey: ['ruleset', id] })
+              queryClient.invalidateQueries({ queryKey: ['rulesetPapers', id] })
+            }}
+          />
+        </div>
       )}
 
       <div
