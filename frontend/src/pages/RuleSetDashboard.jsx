@@ -1714,12 +1714,13 @@ function RuleSetDashboard() {
       {tab === 'settings' && (
         <EditableSettings
           ruleset={ruleset}
-          onSaved={() => queryClient.invalidateQueries({ queryKey: ['ruleset', id] })}
+          onSaved={() => { queryClient.invalidateQueries({ queryKey: ['ruleset', id] }); queryClient.invalidateQueries({ queryKey: ['topicOverview'] }) }}
           onReinit={(runData) => {
             setActiveRunId(runData.id)
             setTab('papers')
             queryClient.invalidateQueries({ queryKey: ['ruleset', id] })
             queryClient.invalidateQueries({ queryKey: ['rulesetPapers', id] })
+            queryClient.invalidateQueries({ queryKey: ['topicOverview'] })
           }}
           onDeleted={() => {
             queryClient.invalidateQueries({ queryKey: ['rulesets'] })
