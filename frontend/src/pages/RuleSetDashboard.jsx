@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import LlmLoadingBanner from '../components/LlmLoadingBanner'
 import { useTasks } from '../contexts/TaskContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   getRuleset, getRulesetPapers, createRun, getRuns, getRun, updatePaperStatus,
   getDigests, createDigest, updateRuleset, exportDigestMarkdown, getReinitPreview,
@@ -32,6 +33,7 @@ function ScoreBadge({ score }) {
 }
 
 function PaperCard({ paper, rulesetId, onStatusChange, selected, onToggleSelect }) {
+  const { t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   const navigate = useNavigate()
   const arxivUrl = paper.arxiv_id?.startsWith('s2:')
@@ -75,7 +77,7 @@ function PaperCard({ paper, rulesetId, onStatusChange, selected, onToggleSelect 
               target="_blank"
               rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
-              title="View on ArXiv"
+              title={t('paperDetail.viewOnArxiv')}
             >
               <ExternalLink size={12} style={{ color: 'var(--muted)' }} />
             </a>
@@ -101,25 +103,25 @@ function PaperCard({ paper, rulesetId, onStatusChange, selected, onToggleSelect 
             {paper.is_new && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium" style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}>
                 <Radio size={10} />
-                Tracked
+                {t('ruleSet.settings.tracked')}
               </span>
             )}
             {paper.is_survey && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium" style={{ background: 'var(--warn-subtle)', color: 'var(--warn)' }}>
                 <FileText size={10} />
-                Survey
+                {t('ruleSet.settings.survey')}
               </span>
             )}
             {paper.analyzed_at && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium" style={{ background: 'var(--ok-subtle)', color: 'var(--ok)' }}>
                 <Sparkles size={10} />
-                AI Analyzed
+                {t('ruleSet.settings.aiAnalyzed')}
               </span>
             )}
             {paper.venue && <span>{paper.venue}</span>}
             {paper.year && <span>{paper.year}</span>}
-            <span>{paper.citation_count || 0} citations</span>
-            <span>{(paper.impact_score || 0).toFixed(2)} impact</span>
+            <span>{paper.citation_count || 0} {t('paperDetail.citations')}</span>
+            <span>{(paper.impact_score || 0).toFixed(2)} {t('paperDetail.impact')}</span>
             {paper.abstract && (
               <span className="ml-auto flex items-center gap-0.5" style={{ color: 'var(--accent)' }}>
                 {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -133,7 +135,7 @@ function PaperCard({ paper, rulesetId, onStatusChange, selected, onToggleSelect 
               onClick={() => onStatusChange(paper.id, 'favorited')}
               className="p-1.5 rounded-md cursor-pointer"
               style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
-              title="Favorite"
+              title={t('papers.favorite')}
             >
               <Star size={14} />
             </button>
@@ -143,7 +145,7 @@ function PaperCard({ paper, rulesetId, onStatusChange, selected, onToggleSelect 
               onClick={() => onStatusChange(paper.id, 'archived')}
               className="p-1.5 rounded-md cursor-pointer"
               style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
-              title="Archive"
+              title={t('papers.archive')}
             >
               <Archive size={14} />
             </button>
@@ -153,7 +155,7 @@ function PaperCard({ paper, rulesetId, onStatusChange, selected, onToggleSelect 
               onClick={() => onStatusChange(paper.id, 'inbox')}
               className="p-1.5 rounded-md cursor-pointer"
               style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
-              title="Move to inbox"
+              title={t('papers.moveToInbox')}
             >
               <Inbox size={14} />
             </button>
@@ -165,6 +167,7 @@ function PaperCard({ paper, rulesetId, onStatusChange, selected, onToggleSelect 
 }
 
 function RunProgress({ rulesetId, runId, onComplete }) {
+  const { t } = useLanguage()
   const { data: run, dataUpdatedAt } = useQuery({
     queryKey: ['run', rulesetId, runId],
     queryFn: () => getRun(rulesetId, runId),
@@ -186,7 +189,7 @@ function RunProgress({ rulesetId, runId, onComplete }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0
 
   const STAGE_STEPS = { searching: 1, scoring: 2, done: 2 }
-  const STAGE_LABELS = { searching: '检索论文', scoring: 'LLM 评分', done: '完成' }
+  const STAGE_LABELS = { searching: t('ruleSet.run.searching'), scoring: t('ruleSet.run.scoring'), done: t('ruleSet.run.done') }
   const TOTAL_STEPS = 2
   const stepNum = STAGE_STEPS[stage] || 1
   const stageLabel = STAGE_LABELS[stage] || stage || run.status
@@ -198,15 +201,15 @@ function RunProgress({ rulesetId, runId, onComplete }) {
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
-          {run.run_type === 'initialize' ? 'Initialize' : 'Track'} — {stageLabel}
+          {run.run_type === 'initialize' ? t('ruleSet.initialize') : t('ruleSet.track')} — {stageLabel}
         </span>
         <span className="text-xs" style={{ color: 'var(--muted)' }}>
-          {run.status === 'completed' ? '✓ 完成' : run.status === 'failed' ? '✗ 失败' : `${pct}%`}
+          {run.status === 'completed' ? t('ruleSet.run.completed') : run.status === 'failed' ? t('ruleSet.run.failed') : `${pct}%`}
         </span>
       </div>
       {run.status === 'running' && stage && stage !== 'done' && (
         <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>
-          步骤 {stepNum}/{TOTAL_STEPS} · {done != null && total != null ? `${done}/${total}` : ''}
+          {t('ruleSet.run.step').replace('{step}', stepNum).replace('{total}', TOTAL_STEPS)} · {done != null && total != null ? `${done}/${total}` : ''}
         </p>
       )}
       <div
@@ -231,32 +234,33 @@ function RunProgress({ rulesetId, runId, onComplete }) {
 const DIGEST_TYPES = [
   {
     key: 'field_overview',
-    label: 'Field Overview',
-    description: 'Comprehensive overview of the research landscape',
+    labelKey: 'ruleSet.digest.fieldOverview',
+    descriptionKey: 'ruleSet.digest.fieldOverviewDesc',
     icon: Map,
   },
   {
     key: 'weekly',
-    label: 'Weekly Digest',
-    description: "Summary of this week's papers and trends",
+    labelKey: 'ruleSet.digest.weekly',
+    descriptionKey: 'ruleSet.digest.weeklyDesc',
     icon: CalendarDays,
   },
   {
     key: 'monthly',
-    label: 'Monthly Report',
-    description: 'Monthly analysis with clusters and momentum',
+    labelKey: 'ruleSet.digest.monthly',
+    descriptionKey: 'ruleSet.digest.monthlyDesc',
     icon: TrendingUp,
   },
 ]
 
 function DigestTypeBadge({ type }) {
+  const { t } = useLanguage()
   const styles = {
     field_overview: { bg: 'var(--accent-subtle)', color: 'var(--accent)' },
     weekly: { bg: 'var(--ok-subtle)', color: 'var(--ok)' },
     monthly: { bg: 'var(--warn-subtle)', color: 'var(--warn)' },
   }
   const s = styles[type] || styles.field_overview
-  const labels = { field_overview: 'Field Overview', weekly: 'Weekly', monthly: 'Monthly' }
+  const labels = { field_overview: t('ruleSet.digest.fieldOverview'), weekly: t('ruleSet.digest.badgeWeekly'), monthly: t('ruleSet.digest.badgeMonthly') }
   return (
     <span
       className="px-2 py-0.5 rounded-md text-xs font-medium"
@@ -335,15 +339,17 @@ function DigestSection({ title, children }) {
 }
 
 function DigestContent({ digestType, content }) {
+  const { t } = useLanguage()
   if (!content) return null
   const refs = content.paper_references || []
 
   if (digestType === 'field_overview') {
     const readingStages = content.reading_path ? [
       { key: 'start_with', reasonKey: 'start_reason', label: '入门必读', icon: '📖' },
-      { key: 'then_read', reasonKey: 'then_reason', label: '进阶理解', icon: '🔬' },
-      { key: 'deep_dive', reasonKey: 'deep_reason', label: '深入研究', icon: '🚀' },
+      { key: 'then_read', reasonKey: 'then_reason', label: t('ruleSet.reading.then'), icon: '🔬' },
+      { key: 'deep_dive', reasonKey: 'deep_reason', label: t('ruleSet.reading.deep'), icon: '🚀' },
     ].filter(s => content.reading_path[s.key]) : []
+    if (readingStages.length > 0) readingStages[0].label = t('ruleSet.reading.start')
 
     const maturityColors = {
       emerging: { bg: 'var(--warn-subtle)', color: 'var(--warn)' },
@@ -353,10 +359,10 @@ function DigestContent({ digestType, content }) {
 
     return (
       <div className="flex flex-col gap-1">
-        <DigestSection title="Summary">
+        <DigestSection title={t('ruleSet.digest.summary')}>
           <p className="text-sm" style={{ color: 'var(--text)' }}>{content.summary}</p>
         </DigestSection>
-        <DigestSection title="Research Pillars">
+        <DigestSection title={t('ruleSet.digest.researchPillars')}>
           {content.pillars?.map((pillar, i) => (
             <div key={i} className="mb-3 p-3 rounded-lg" style={{ background: 'var(--bg-elevated)' }}>
               <div className="flex items-center gap-2 mb-1.5">
@@ -393,7 +399,7 @@ function DigestContent({ digestType, content }) {
           ))}
         </DigestSection>
         {readingStages.length > 0 && (
-          <DigestSection title="Reading Path">
+          <DigestSection title={t('ruleSet.digest.readingPath')}>
             <div className="flex flex-col gap-3">
               {readingStages.map(stage => {
                 const papers = content.reading_path[stage.key]
@@ -415,7 +421,7 @@ function DigestContent({ digestType, content }) {
             </div>
           </DigestSection>
         )}
-        <DigestSection title="Open Problems">
+        <DigestSection title={t('ruleSet.digest.openProblems')}>
           <SectionList items={content.open_problems} />
         </DigestSection>
       </div>
@@ -425,22 +431,22 @@ function DigestContent({ digestType, content }) {
   if (digestType === 'weekly') {
     return (
       <div className="flex flex-col gap-1">
-        <DigestSection title="Week Summary">
+        <DigestSection title={t('ruleSet.digest.weekSummary')}>
           <p className="text-sm" style={{ color: 'var(--text)' }}>{content.week_summary}</p>
         </DigestSection>
-        <DigestSection title="Must Read">
+        <DigestSection title={t('ruleSet.digest.mustRead')}>
           <SectionList items={content.must_read} paperRefs={refs} />
         </DigestSection>
-        <DigestSection title="Worth Noting">
+        <DigestSection title={t('ruleSet.digest.worthNoting')}>
           <SectionList items={content.worth_noting} paperRefs={refs} />
         </DigestSection>
         {content.trend_signal && (
-          <DigestSection title="Trend Signal">
+          <DigestSection title={t('ruleSet.digest.trendSignal')}>
             <p className="text-sm" style={{ color: 'var(--text)' }}>{content.trend_signal}</p>
           </DigestSection>
         )}
         {content.skip_reason && (
-          <DigestSection title="Papers Skipped">
+          <DigestSection title={t('ruleSet.digest.papersSkipped')}>
             <p className="text-sm" style={{ color: 'var(--muted)' }}>{content.skip_reason}</p>
           </DigestSection>
         )}
@@ -451,14 +457,14 @@ function DigestContent({ digestType, content }) {
   if (digestType === 'monthly') {
     return (
       <div className="flex flex-col gap-1">
-        <DigestSection title="Month Summary">
+        <DigestSection title={t('ruleSet.digest.monthSummary')}>
           <p className="text-sm" style={{ color: 'var(--text)' }}>{content.month_summary}</p>
         </DigestSection>
-        <DigestSection title="Highlights">
+        <DigestSection title={t('ruleSet.digest.highlights')}>
           <SectionList items={content.highlights} paperRefs={refs} />
         </DigestSection>
         {content.clusters && Array.isArray(content.clusters) && (
-          <DigestSection title="Paper Clusters">
+          <DigestSection title={t('ruleSet.digest.paperClusters')}>
             {content.clusters.map((cluster, i) => (
               <div key={i} className="mb-2 p-3 rounded-lg" style={{ background: 'var(--bg-elevated)' }}>
                 <div className="flex items-center gap-2 mb-1">
@@ -497,11 +503,11 @@ function DigestContent({ digestType, content }) {
           </DigestSection>
         )}
         {content.momentum && typeof content.momentum === 'object' && (
-          <DigestSection title="Momentum">
+          <DigestSection title={t('ruleSet.digest.momentum')}>
             {[
-              { key: 'accelerating', label: '加速发展', icon: '🔥' },
-              { key: 'emerging', label: '新兴方向', icon: '🌱' },
-              { key: 'declining', label: '趋于平缓', icon: '📉' },
+              { key: 'accelerating', label: t('ruleSet.digest.accelerating'), icon: '🔥' },
+              { key: 'emerging', label: t('ruleSet.digest.emerging'), icon: '🌱' },
+              { key: 'declining', label: t('ruleSet.digest.declining'), icon: '📉' },
             ].map(({ key, label, icon }) => {
               const items = content.momentum[key]
               if (!items || (Array.isArray(items) && items.length === 0)) return null
@@ -519,7 +525,7 @@ function DigestContent({ digestType, content }) {
           </DigestSection>
         )}
         {content.next_month_watch && (
-          <DigestSection title="Next Month Watch">
+          <DigestSection title={t('ruleSet.digest.nextMonthWatch')}>
             {typeof content.next_month_watch === 'string' ? (
               <p className="text-sm" style={{ color: 'var(--text)' }}>{content.next_month_watch}</p>
             ) : (
@@ -540,6 +546,7 @@ function DigestContent({ digestType, content }) {
 }
 
 function DigestCard({ digest, rulesetId }) {
+  const { t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   const date = new Date(digest.created_at).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -552,7 +559,7 @@ function DigestCard({ digest, rulesetId }) {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      const typeLabels = { field_overview: '领域概览', weekly: '周报', monthly: '月报' }
+      const typeLabels = { field_overview: t('ruleSet.dl.fieldOverview'), weekly: t('ruleSet.dl.weekly'), monthly: t('ruleSet.dl.monthly') }
       const label = typeLabels[digest.digest_type] || digest.digest_type
       a.download = `${label}_${new Date(digest.created_at).toISOString().slice(0, 10)}.md`
       a.click()
@@ -576,16 +583,16 @@ function DigestCard({ digest, rulesetId }) {
         >
           <DigestTypeBadge type={digest.digest_type} />
           <span className="text-sm" style={{ color: 'var(--text-strong)' }}>{date}</span>
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>
-            {digest.paper_count} papers
-          </span>
+            <span className="text-xs" style={{ color: 'var(--muted)' }}>
+              {digest.paper_count} papers
+            </span>
         </button>
         <div className="flex items-center gap-1">
           <button
             onClick={handleDownload}
             className="p-1.5 rounded-md cursor-pointer"
             style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
-            title="Export Markdown"
+            title={t('ruleSet.digest.exportMarkdown')}
           >
             <Download size={14} />
           </button>
@@ -661,6 +668,7 @@ function SettingsTagInput({ tags, onChange, placeholder }) {
 }
 
 function ReinitDialog({ onConfirm, onDismiss, isPending, preview }) {
+  const { t } = useLanguage()
   return (
     <div
       className="p-5 rounded-xl border mb-4"
@@ -675,10 +683,10 @@ function ReinitDialog({ onConfirm, onDismiss, isPending, preview }) {
         </div>
         <div className="flex-1">
           <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-strong)' }}>
-            配置已更新
+            {t('ruleSet.reinit.updated')}
           </p>
           <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>
-            检测到搜索相关字段变更，建议重新初始化以更新论文列表。
+            {t('ruleSet.reinit.detected')}
           </p>
           {preview && (
             <div
@@ -686,13 +694,13 @@ function ReinitDialog({ onConfirm, onDismiss, isPending, preview }) {
               style={{ background: 'var(--bg-secondary)' }}
             >
               <span style={{ color: 'var(--muted)' }}>
-                当前共 <strong style={{ color: 'var(--text)' }}>{preview.total}</strong> 篇论文
+                {t('ruleSet.reinit.currentTotal').replace('{n}', preview.total)}
               </span>
               <span style={{ color: 'var(--muted)' }}>
-                收藏 <strong style={{ color: 'var(--text)' }}>{preview.favorited}</strong> 篇（保留）
+                {t('ruleSet.reinit.favoritedKept').replace('{n}', preview.favorited)}
               </span>
               <span style={{ color: 'var(--danger, #ef4444)' }}>
-                将清除 <strong>{preview.will_remove}</strong> 篇
+                {t('ruleSet.reinit.willRemove').replace('{n}', preview.will_remove)}
               </span>
             </div>
           )}
@@ -704,14 +712,14 @@ function ReinitDialog({ onConfirm, onDismiss, isPending, preview }) {
               style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', border: 'none' }}
             >
               {isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              重新初始化
+              {t('ruleSet.reinit.confirm')}
             </button>
             <button
               onClick={onDismiss}
               className="px-4 py-2 rounded-lg text-sm cursor-pointer"
               style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }}
             >
-              暂不操作
+              {t('ruleSet.reinit.later')}
             </button>
           </div>
         </div>
@@ -721,6 +729,7 @@ function ReinitDialog({ onConfirm, onDismiss, isPending, preview }) {
 }
 
 function AddPaperForm({ rulesetId, onAdded }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [successMsg, setSuccessMsg] = useState(null)
@@ -730,7 +739,7 @@ function AddPaperForm({ rulesetId, onAdded }) {
     onSuccess: (data) => {
       setInput('')
       setOpen(false)
-      setSuccessMsg(data.title ? `Added: ${data.title}` : data.message)
+      setSuccessMsg(data.title ? t('ruleSet.addPaper.success').replace('{title}', data.title) : data.message)
       onAdded()
       setTimeout(() => setSuccessMsg(null), 3000)
     },
@@ -744,7 +753,7 @@ function AddPaperForm({ rulesetId, onAdded }) {
         style={{ background: 'transparent', border: '1px dashed var(--border)', color: 'var(--muted)' }}
       >
         <Plus size={12} />
-        Add Paper
+        {t('ruleSet.settings.addPaper')}
       </button>
     )
   }
@@ -781,7 +790,7 @@ function AddPaperForm({ rulesetId, onAdded }) {
             style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', border: 'none' }}
           >
             {mutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            Add
+            {t('ruleSet.addPaper.add')}
           </button>
           <button
             onClick={() => { setOpen(false); setInput(''); mutation.reset() }}
@@ -794,7 +803,7 @@ function AddPaperForm({ rulesetId, onAdded }) {
       )}
       {mutation.isError && (
         <p className="text-xs" style={{ color: 'var(--danger)' }}>
-          {mutation.error?.response?.data?.detail || 'Failed to add paper. Please try again.'}
+          {mutation.error?.response?.data?.detail || t('ruleSet.addPaper.failed')}
         </p>
       )}
     </div>
@@ -812,6 +821,7 @@ function hasSignificantChanges(oldRuleset, newForm) {
 }
 
 function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
+  const { t } = useLanguage()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState(null)
   const [showReinitDialog, setShowReinitDialog] = useState(false)
@@ -882,10 +892,10 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
             className="flex items-center gap-3 p-4 rounded-xl border"
             style={{ background: 'var(--danger-subtle)', borderColor: 'var(--danger)' }}
           >
-            <span className="text-sm" style={{ color: 'var(--danger)' }}>
-              重新初始化失败。{reinitMutation.error?.response?.data?.detail || '请稍后重试。'}
-            </span>
-          </div>
+              <span className="text-sm" style={{ color: 'var(--danger)' }}>
+                {reinitMutation.error?.response?.data?.detail || t('settings.failedToSave')}
+              </span>
+            </div>
         )}
         <div className="flex justify-end">
           <button
@@ -894,11 +904,11 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
           >
             <Pencil size={12} />
-            Edit
+            {t('ruleSet.settings.edit')}
           </button>
         </div>
         <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-          <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>Categories</h3>
+          <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.categories')}</h3>
           <div className="flex flex-wrap gap-1.5">
             {(ruleset.categories || []).map((c, i) => (
               <span key={i} className="px-2 py-0.5 rounded-md text-xs" style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}>{c}</span>
@@ -906,7 +916,7 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
           </div>
         </div>
         <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-          <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>Search Queries</h3>
+          <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.searchQueries')}</h3>
           <div className="flex flex-col gap-1.5">
             {(ruleset.search_queries || []).map((q, i) => (
               <span key={i} className="text-sm" style={{ color: 'var(--text)' }}>{i + 1}. {q}</span>
@@ -914,9 +924,9 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
           </div>
         </div>
         <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-          <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>Keywords</h3>
+          <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.keywords')}</h3>
           <div className="mb-3">
-            <span className="text-xs font-medium" style={{ color: 'var(--muted)' }}>Include:</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--muted)' }}>{t('ruleSet.settings.include')}</span>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {(ruleset.keywords_include || []).map((k, i) => (
                 <span key={i} className="px-2 py-0.5 rounded-md text-xs" style={{ background: 'var(--ok-subtle)', color: 'var(--ok)' }}>{k}</span>
@@ -924,7 +934,7 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
             </div>
           </div>
           <div>
-            <span className="text-xs font-medium" style={{ color: 'var(--muted)' }}>Exclude:</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--muted)' }}>{t('ruleSet.settings.exclude')}</span>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {(ruleset.keywords_exclude || []).map((k, i) => (
                 <span key={i} className="px-2 py-0.5 rounded-md text-xs" style={{ background: 'var(--danger-subtle)', color: 'var(--danger)' }}>{k}</span>
@@ -933,9 +943,9 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
           </div>
         </div>
         <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-          <h3 className="text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>论文来源</h3>
+          <h3 className="text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.source')}</h3>
           <span className="text-sm" style={{ color: 'var(--text)' }}>
-            {{ all: '不限来源', arxiv: '仅 ArXiv', open_access: '开放获取（ArXiv + PMC）' }[ruleset.source_filter || 'all']}
+            {{ all: t('ruleSet.settings.sourceAll'), arxiv: t('ruleSet.settings.sourceArxiv'), open_access: t('ruleSet.settings.sourceOpenAccess') }[ruleset.source_filter || 'all']}
           </span>
         </div>
 
@@ -944,10 +954,10 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
           style={{ borderColor: 'var(--danger, #ef4444)', background: 'var(--card)' }}
         >
           <h3 className="text-sm font-medium mb-1" style={{ color: 'var(--danger, #ef4444)' }}>
-            Danger Zone
+            {t('ruleSet.settings.dangerZone')}
           </h3>
           <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>
-            Permanently delete this topic and all associated papers, digests, and run history.
+            {t('ruleSet.settings.deleteDesc')}
           </p>
           {showDeleteConfirm ? (
             <div className="flex items-center gap-3">
@@ -958,14 +968,14 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
                 style={{ background: 'var(--danger, #ef4444)', color: '#fff', border: 'none' }}
               >
                 {deleteMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                Confirm Delete
+                {t('ruleSet.settings.confirmDelete')}
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 className="px-4 py-2 rounded-lg text-sm cursor-pointer"
                 style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }}
               >
-                Cancel
+                {t('ruleSet.settings.cancel')}
               </button>
             </div>
           ) : (
@@ -975,12 +985,12 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
               style={{ background: 'transparent', border: '1px solid var(--danger, #ef4444)', color: 'var(--danger, #ef4444)' }}
             >
               <Trash2 size={14} />
-              Delete Topic
+              {t('ruleSet.settings.deleteTopic')}
             </button>
           )}
           {deleteMutation.isError && (
             <p className="text-xs mt-2" style={{ color: 'var(--danger, #ef4444)' }}>
-              {deleteMutation.error?.response?.data?.detail || 'Failed to delete.'}
+              {deleteMutation.error?.response?.data?.detail || t('settings.failedToSave')}
             </p>
           )}
         </div>
@@ -991,7 +1001,7 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>Name</label>
+        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.wizard.name')}</label>
         <input
           value={form.name}
           onChange={e => update('name', e.target.value)}
@@ -1000,7 +1010,7 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
         />
       </div>
       <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>Topic Sentence</label>
+        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.wizard.topic')}</label>
         <textarea
           value={form.topic_sentence}
           onChange={e => update('topic_sentence', e.target.value)}
@@ -1010,32 +1020,32 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
         />
       </div>
       <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>Categories</label>
+        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.categories')}</label>
         <SettingsTagInput tags={form.categories} onChange={val => update('categories', val)} placeholder="e.g. cs.AI" />
       </div>
       <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>Search Queries</label>
+        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.searchQueries')}</label>
         <SettingsTagInput tags={form.search_queries} onChange={val => update('search_queries', val)} placeholder="Add search query" />
       </div>
       <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>Include Keywords</label>
+        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.wizard.includeKeywords')}</label>
         <SettingsTagInput tags={form.keywords_include} onChange={val => update('keywords_include', val)} placeholder="Add keyword" />
       </div>
       <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
-        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>Exclude Keywords</label>
+        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.wizard.excludeKeywords')}</label>
         <SettingsTagInput tags={form.keywords_exclude} onChange={val => update('keywords_exclude', val)} placeholder="Add keyword to exclude" />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>论文来源</label>
+        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.source')}</label>
         <select
           value={form.source_filter || 'all'}
           onChange={e => update('source_filter', e.target.value)}
           className="w-full px-3 py-2 rounded-lg border text-sm"
           style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text)' }}
         >
-          <option value="all">不限来源</option>
-          <option value="arxiv">仅 ArXiv（推荐 CS/AI/ML）</option>
-          <option value="open_access">开放获取（ArXiv + PMC）</option>
+          <option value="all">{t('ruleSet.settings.sourceAll')}</option>
+          <option value="arxiv">{t('ruleSet.wizard.sourceArxiv')}</option>
+          <option value="open_access">{t('ruleSet.settings.sourceOpenAccess')}</option>
         </select>
       </div>
       <div className="flex items-center gap-3 justify-end">
@@ -1044,7 +1054,7 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
           className="px-4 py-2 rounded-lg text-sm cursor-pointer"
           style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)' }}
         >
-          Cancel
+          {t('ruleSet.settings.cancel')}
         </button>
         <button
           onClick={() => saveMutation.mutate()}
@@ -1053,12 +1063,12 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
           style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', border: 'none' }}
         >
           {saveMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-          {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
+          {saveMutation.isPending ? t('ruleSet.settings.saving') : t('ruleSet.settings.saveChanges')}
         </button>
       </div>
       {saveMutation.isError && (
         <p className="text-sm" style={{ color: 'var(--danger)' }}>
-          Failed to save. {saveMutation.error?.response?.data?.detail || 'Please try again.'}
+          {saveMutation.error?.response?.data?.detail || t('settings.failedToSave')}
         </p>
       )}
     </div>
@@ -1070,6 +1080,7 @@ function RuleSetDashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { addToast } = useTasks()
+  const { t } = useLanguage()
   const [tab, setTab] = useState('papers')
   const [statusFilter, setStatusFilter] = useState(null)
   const [sourceFilter, setSourceFilter] = useState(null)
@@ -1219,9 +1230,9 @@ function RuleSetDashboard() {
   }
 
   const TABS = [
-    { key: 'papers', label: 'Papers', icon: BookOpen },
-    { key: 'digests', label: 'Digests', icon: FileText },
-    { key: 'settings', label: 'Settings', icon: Settings },
+    { key: 'papers', label: t('ruleSet.tab.papers'), icon: BookOpen },
+    { key: 'digests', label: t('ruleSet.tab.digests'), icon: FileText },
+    { key: 'settings', label: t('ruleSet.tab.settings'), icon: Settings },
   ]
 
   return (
@@ -1232,7 +1243,7 @@ function RuleSetDashboard() {
         style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
       >
         <ArrowLeft size={16} />
-        All Topics
+        {t('ruleSet.allTopics')}
       </button>
 
       <div className="flex items-start justify-between mb-6">
@@ -1253,7 +1264,7 @@ function RuleSetDashboard() {
                 <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
                   {topicOverview.paper_counts.initialize}
                 </span>
-                <span className="text-xs" style={{ color: 'var(--muted)' }}>foundational</span>
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('ruleSet.paperCount.foundational')}</span>
               </div>
               <span className="text-[10px]" style={{ color: 'var(--border-strong)' }}>·</span>
               <div className="flex items-center gap-1.5">
@@ -1261,7 +1272,7 @@ function RuleSetDashboard() {
                 <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
                   {topicOverview.paper_counts.track}
                 </span>
-                <span className="text-xs" style={{ color: 'var(--muted)' }}>tracked</span>
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('ruleSet.paperCount.tracked')}</span>
                 {topicOverview.last_track_at && (
                   <span
                     className="text-xs font-medium"
@@ -1277,7 +1288,7 @@ function RuleSetDashboard() {
                 <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
                   {topicOverview.paper_counts.favorited}
                 </span>
-                <span className="text-xs" style={{ color: 'var(--muted)' }}>favorites</span>
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('ruleSet.paperCount.favorites')}</span>
               </div>
             </div>
           )}
@@ -1295,7 +1306,7 @@ function RuleSetDashboard() {
               }}
             >
               {runMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-              Initialize
+              {t('ruleSet.initialize')}
             </button>
           )}
           {ruleset.is_initialized && !activeRunId && (
@@ -1310,7 +1321,7 @@ function RuleSetDashboard() {
               }}
             >
               {runMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              Track
+              {t('ruleSet.track')}
             </button>
           )}
         </div>
@@ -1353,10 +1364,10 @@ function RuleSetDashboard() {
         <div>
           <div className="flex items-center gap-2 mb-4">
             {[
-              { key: 'All', label: 'All', icon: null },
-              { key: 'inbox', label: 'Inbox', icon: Inbox },
-              { key: 'favorited', label: 'Favorited', icon: Star },
-              { key: 'archived', label: 'Archived', icon: Archive },
+               { key: 'All', label: t('ruleSet.filter.all'), icon: null },
+               { key: 'inbox', label: t('ruleSet.filter.inbox'), icon: Inbox },
+               { key: 'favorited', label: t('ruleSet.filter.favorited'), icon: Star },
+               { key: 'archived', label: t('ruleSet.filter.archived'), icon: Archive },
             ].map(({ key: s, label, icon: Icon }) => (
               <button
                 key={s}
@@ -1379,7 +1390,7 @@ function RuleSetDashboard() {
                 onClick={handleBibtexExport}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs cursor-pointer"
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--muted)' }}
-                title="Export BibTeX"
+                title={t('ruleSet.exportBibtex')}
               >
                 <Download size={12} />
                 BibTeX
@@ -1412,16 +1423,16 @@ function RuleSetDashboard() {
               className="flex items-center gap-3 p-3 rounded-lg mb-4"
               style={{ background: 'var(--accent-subtle)' }}
             >
-              <span className="text-xs font-medium" style={{ color: 'var(--accent)' }}>
-                {selectedPapers.size} selected
-              </span>
+                <span className="text-xs font-medium" style={{ color: 'var(--accent)' }}>
+                  {t('ruleSet.bulk.selected').replace('{n}', selectedPapers.size)}
+                </span>
               <button
                 onClick={() => bulkMutation.mutate({ paperIds: [...selectedPapers], status: 'favorited' })}
                 disabled={bulkMutation.isPending}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs cursor-pointer"
                 style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)' }}
               >
-                <Star size={12} /> Favorite
+                 <Star size={12} /> {t('ruleSet.bulk.favorite')}
               </button>
               <button
                 onClick={() => bulkMutation.mutate({ paperIds: [...selectedPapers], status: 'archived' })}
@@ -1429,7 +1440,7 @@ function RuleSetDashboard() {
                 className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs cursor-pointer"
                 style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)' }}
               >
-                <Archive size={12} /> Archive
+                 <Archive size={12} /> {t('ruleSet.bulk.archive')}
               </button>
               <button
                 onClick={() => bulkMutation.mutate({ paperIds: [...selectedPapers], status: 'inbox' })}
@@ -1437,15 +1448,15 @@ function RuleSetDashboard() {
                 className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs cursor-pointer"
                 style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text)' }}
               >
-                <Inbox size={12} /> Inbox
+                 <Inbox size={12} /> {t('ruleSet.bulk.inbox')}
               </button>
               <button
                 onClick={() => setSelectedPapers(new Set())}
                 className="ml-auto px-2.5 py-1 rounded-md text-xs cursor-pointer"
                 style={{ background: 'transparent', border: 'none', color: 'var(--muted)' }}
               >
-                Clear
-              </button>
+                 {t('ruleSet.bulk.clear')}
+               </button>
             </div>
           )}
 
@@ -1474,7 +1485,7 @@ function RuleSetDashboard() {
                   className="cursor-pointer accent-[var(--accent)]"
                   style={{ width: 16, height: 16 }}
                 />
-                <span className="text-xs" style={{ color: 'var(--muted)' }}>Select all on page</span>
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('ruleSet.selectAllPage')}</span>
               </div>
               <div className="flex flex-col gap-3">
                 {papersData.items.map(paper => (
@@ -1496,10 +1507,10 @@ function RuleSetDashboard() {
                     className="px-3 py-1.5 rounded-md text-sm cursor-pointer disabled:opacity-30"
                     style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
                   >
-                    Previous
+                    {t('ruleSet.previous')}
                   </button>
                   <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                    Page {page} of {Math.ceil(papersData.total / papersData.page_size)}
+                    {t('ruleSet.pageOf').replace('{page}', page).replace('{total}', Math.ceil(papersData.total / papersData.page_size))}
                   </span>
                   <button
                     onClick={() => setPage(p => p + 1)}
@@ -1507,7 +1518,7 @@ function RuleSetDashboard() {
                     className="px-3 py-1.5 rounded-md text-sm cursor-pointer disabled:opacity-30"
                     style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
                   >
-                    Next
+                    {t('ruleSet.next')}
                   </button>
                 </div>
               )}
@@ -1520,8 +1531,8 @@ function RuleSetDashboard() {
               <BookOpen size={40} className="mx-auto mb-3" style={{ color: 'var(--muted)' }} />
               <p className="text-sm" style={{ color: 'var(--muted)' }}>
                 {ruleset.is_initialized
-                  ? 'No papers match current filters'
-                  : 'Run Initialize to discover foundational papers'}
+                  ? t('ruleSet.empty.noMatch')
+                  : t('ruleSet.empty.runInitialize')}
               </p>
             </div>
           )}
@@ -1534,13 +1545,17 @@ function RuleSetDashboard() {
         const latest = filtered[0] || null
         const older = filtered.slice(1)
         const activeType = DIGEST_TYPES.find(t => t.key === digestTab)
-        const genLabel = { field_overview: 'field overview', weekly: 'weekly digest', monthly: 'monthly report' }
+        const genLabel = {
+          field_overview: t('ruleSet.digest.fieldOverview').toLowerCase(),
+          weekly: t('ruleSet.digest.weekly').toLowerCase(),
+          monthly: t('ruleSet.digest.monthly').toLowerCase(),
+        }
 
         return (
           <div>
             <div className="flex items-center gap-1 mb-5" style={{ borderBottom: '1px solid var(--border)' }}>
               <div className="flex items-center gap-0.5 flex-1">
-                {DIGEST_TYPES.map(({ key, label, icon: Icon }) => (
+                {DIGEST_TYPES.map(({ key, labelKey, icon: Icon }) => (
                   <button
                     key={key}
                     onClick={() => { setDigestTab(key); setShowDigestHistory(false) }}
@@ -1552,7 +1567,7 @@ function RuleSetDashboard() {
                     }}
                   >
                     <Icon size={14} />
-                    {label}
+                    {t(labelKey)}
                     {digestTab === key && (
                       <span
                         className="absolute bottom-0 left-2 right-2 rounded-full"
@@ -1576,7 +1591,7 @@ function RuleSetDashboard() {
                   ? <Loader2 size={12} className="animate-spin" />
                   : <RefreshCw size={12} />
                 }
-                {latest ? 'Regenerate' : 'Generate'}
+                {latest ? t('ruleSet.digest.regenerate') : t('ruleSet.digest.generate')}
               </button>
             </div>
 
@@ -1587,7 +1602,7 @@ function RuleSetDashboard() {
               >
                 <Loader2 size={14} className="animate-spin" style={{ color: 'var(--accent)' }} />
                 <span className="text-xs font-medium" style={{ color: 'var(--accent)' }}>
-                  Generating {genLabel[generatingDigest] || generatingDigest}... Check Tasks page for progress.
+                  {t('ruleSet.digest.generating').replace('{type}', genLabel[generatingDigest] || generatingDigest)}
                 </span>
               </div>
             )}
@@ -1598,7 +1613,7 @@ function RuleSetDashboard() {
                 style={{ background: 'var(--danger-subtle)', borderColor: 'var(--danger)' }}
               >
                 <span className="text-sm" style={{ color: 'var(--danger)' }}>
-                  Failed to generate digest. {digestMutation.error?.response?.data?.detail || 'Please try again.'}
+                  {t('ruleSet.digest.failed').replace('{error}', digestMutation.error?.response?.data?.detail || t('settings.failedToSave'))}
                 </span>
               </div>
             )}
@@ -1637,7 +1652,7 @@ function RuleSetDashboard() {
                           const url = URL.createObjectURL(blob)
                           const a = document.createElement('a')
                           a.href = url
-                          const typeLabels = { field_overview: '领域概览', weekly: '周报', monthly: '月报' }
+                          const typeLabels = { field_overview: t('ruleSet.dl.fieldOverview'), weekly: t('ruleSet.dl.weekly'), monthly: t('ruleSet.dl.monthly') }
                           a.download = `${typeLabels[latest.digest_type] || latest.digest_type}_${new Date(latest.created_at).toISOString().slice(0, 10)}.md`
                           a.click()
                           URL.revokeObjectURL(url)
@@ -1645,7 +1660,7 @@ function RuleSetDashboard() {
                       }}
                       className="p-1.5 rounded-md cursor-pointer"
                       style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
-                      title="Export Markdown"
+                      title={t('ruleSet.digest.exportMarkdown')}
                     >
                       <Download size={14} />
                     </button>
@@ -1663,7 +1678,7 @@ function RuleSetDashboard() {
                       style={{ background: 'none', border: 'none', color: 'var(--muted)', padding: 0 }}
                     >
                       <History size={12} />
-                      Past {activeType?.label || 'Digests'} ({older.length})
+                      {t('ruleSet.digest.past').replace('{label}', activeType ? t(activeType.labelKey) : t('ruleSet.tab.digests')).replace('{count}', older.length)}
                       {showDigestHistory ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                     </button>
                     {showDigestHistory && (
@@ -1683,10 +1698,10 @@ function RuleSetDashboard() {
               >
                 {activeType && <activeType.icon size={36} className="mx-auto mb-3" style={{ color: 'var(--muted)', opacity: 0.5 }} />}
                 <p className="text-sm mb-1" style={{ color: 'var(--muted)' }}>
-                  No {activeType?.label?.toLowerCase() || 'digest'} yet
+                  {t('ruleSet.digest.none').replace('{type}', activeType ? t(activeType.labelKey).toLowerCase() : t('ruleSet.tab.digests').toLowerCase())}
                 </p>
                 <p className="text-xs" style={{ color: 'var(--muted)', opacity: 0.7 }}>
-                  Click "{latest ? 'Regenerate' : 'Generate'}" to create one
+                  {t('ruleSet.digest.clickGenerate').replace('{action}', latest ? t('ruleSet.digest.regenerate') : t('ruleSet.digest.generate'))}
                 </p>
               </div>
             ) : null}

@@ -5,8 +5,9 @@ import {
   BookOpen, TrendingUp, Star, ChevronRight, Plus, ExternalLink, GripVertical,
 } from 'lucide-react'
 import { getTopicOverview, reorderTopics } from '../api/rulesets'
+import { useLanguage } from '../contexts/LanguageContext'
 
-function formatRelativeTime(dateStr) {
+function formatRelativeTime(dateStr, t) {
   const now = new Date()
   const date = new Date(dateStr)
   const diffMs = now - date
@@ -14,10 +15,10 @@ function formatRelativeTime(dateStr) {
   const diffHours = Math.floor(diffMs / 3600000)
   const diffDays = Math.floor(diffMs / 86400000)
 
-  if (diffMins < 1) return 'just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 30) return `${diffDays}d ago`
+  if (diffMins < 1) return t('home.time.justNow')
+  if (diffMins < 60) return t('home.time.minAgo').replace('{n}', diffMins)
+  if (diffHours < 24) return t('home.time.hourAgo').replace('{n}', diffHours)
+  if (diffDays < 30) return t('home.time.dayAgo').replace('{n}', diffDays)
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
@@ -43,6 +44,7 @@ function Dot() {
 
 function TopicCard({ topic }) {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const { paper_counts: counts, top_papers: papers } = topic
   const hasTracked = topic.last_track_at != null
   const delta = topic.track_latest_count ?? 0
@@ -86,7 +88,7 @@ function TopicCard({ topic }) {
             color: topic.is_initialized ? 'var(--ok)' : 'var(--warn)',
           }}
         >
-          {topic.is_initialized ? 'Initialized' : 'Pending'}
+          {topic.is_initialized ? t('home.initialized') : t('home.pending')}
         </span>
       </div>
 
@@ -96,7 +98,7 @@ function TopicCard({ topic }) {
           <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
             {counts.initialize}
           </span>
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>foundational</span>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('home.foundational')}</span>
         </div>
 
         <Dot />
@@ -106,7 +108,7 @@ function TopicCard({ topic }) {
           <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
             {counts.track}
           </span>
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>tracked</span>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('home.tracked')}</span>
           {hasTracked && (
             <span
               className="text-xs font-medium"
@@ -124,7 +126,7 @@ function TopicCard({ topic }) {
           <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
             {counts.favorited}
           </span>
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>favorites</span>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('home.favorites')}</span>
         </div>
       </div>
 
@@ -154,7 +156,7 @@ function TopicCard({ topic }) {
                         className="flex-shrink-0 px-1 py-0.5 rounded text-[10px] font-medium"
                         style={{ background: 'var(--warn-subtle)', color: 'var(--warn)' }}
                       >
-                        Survey
+                        {t('home.survey')}
                       </span>
                     )}
                     {paper.year && (
@@ -173,7 +175,7 @@ function TopicCard({ topic }) {
             </div>
             {counts.total > 3 && (
               <p className="text-xs mt-2" style={{ color: 'var(--accent)' }}>
-                +{counts.total - 3} more papers
+                {t('home.morePapers').replace('{n}', counts.total - 3)}
               </p>
             )}
           </div>
@@ -189,8 +191,8 @@ function TopicCard({ topic }) {
           />
           <span className="text-[10px]" style={{ color: 'var(--muted)' }}>
             {hasTracked
-              ? `Updated ${formatRelativeTime(topic.last_track_at)}`
-              : `Created ${new Date(topic.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+              ? t('home.updated').replace('{time}', formatRelativeTime(topic.last_track_at, t))
+              : t('home.created').replace('{date}', new Date(topic.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))
             }
           </span>
         </div>
@@ -202,6 +204,7 @@ function TopicCard({ topic }) {
 
 function Home() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const { data: topics, isLoading } = useQuery({
     queryKey: ['topicOverview'],
@@ -253,7 +256,7 @@ function Home() {
             PaperPilot
         </h1>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Your research topics at a glance
+          {t('home.subtitle')}
         </p>
       </div>
 
@@ -301,10 +304,10 @@ function Home() {
             <Plus size={28} style={{ color: 'var(--accent)' }} />
           </div>
           <p className="text-lg font-medium mb-2" style={{ color: 'var(--text-strong)' }}>
-            No topics yet
+            {t('home.noTopics')}
           </p>
           <p className="text-sm mb-5" style={{ color: 'var(--muted)' }}>
-            Create your first topic to start discovering papers
+            {t('home.createFirstTopic')}
           </p>
           <button
             onClick={() => navigate('/topics/new')}
@@ -315,7 +318,7 @@ function Home() {
               border: 'none',
             }}
           >
-            New Topic
+            {t('home.newTopic')}
           </button>
         </div>
       )}

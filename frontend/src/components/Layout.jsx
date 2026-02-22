@@ -3,14 +3,15 @@ import {
   Home, BarChart3, Settings, Sun, Moon, Plus, ListTodo,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { useTasks } from '../contexts/TaskContext'
 import TaskToast from './TaskToast'
 
 const NAV_ITEMS = [
-  { to: '/', icon: Home, label: 'Home' },
-  { to: '/tasks', icon: ListTodo, label: 'Tasks', hasBadge: true },
-  { to: '/stats', icon: BarChart3, label: 'Cost Stats' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/', icon: Home, key: 'layout.nav.home' },
+  { to: '/tasks', icon: ListTodo, key: 'layout.nav.tasks', hasBadge: true },
+  { to: '/stats', icon: BarChart3, key: 'layout.nav.costStats' },
+  { to: '/settings', icon: Settings, key: 'layout.nav.settings' },
 ]
 
 function NavLink({ to, icon: Icon, label, active, badge }) {
@@ -44,6 +45,7 @@ function NavLink({ to, icon: Icon, label, active, badge }) {
 function Layout({ children }) {
   const location = useLocation()
   const { theme, toggleTheme } = useTheme()
+  const { t } = useLanguage()
   const { runningCount } = useTasks()
 
   return (
@@ -93,19 +95,19 @@ function Layout({ children }) {
             }}
           >
             <Plus size={16} />
-            New Topic
+            {t('layout.newTopic')}
           </Link>
         </div>
 
         <nav className="px-3 py-2 flex flex-col gap-1">
-          {NAV_ITEMS.map(({ to, icon, label, hasBadge }) => {
+          {NAV_ITEMS.map(({ to, icon, key, hasBadge }) => {
             const active = location.pathname === to
             return (
               <NavLink
                 key={to}
                 to={to}
                 icon={icon}
-                label={label}
+                label={t(key)}
                 active={active}
                 badge={hasBadge ? runningCount : null}
               />

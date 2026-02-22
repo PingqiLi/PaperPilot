@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { DollarSign, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getCostStats, getDailyCosts, getRequestHistory } from '../api/stats'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const TIME_RANGES = [
   { label: '1d', days: 1 },
@@ -19,8 +20,8 @@ const TIME_RANGES = [
 ]
 
 const CHART_MODES = [
-  { label: 'Cost', key: 'cost' },
-  { label: 'Tokens', key: 'tokens' },
+  { labelKey: 'cost.mode.cost', key: 'cost' },
+  { labelKey: 'cost.mode.tokens', key: 'tokens' },
 ]
 
 const CURRENCY_SYMBOLS = {
@@ -117,6 +118,7 @@ function aggregateChartData(rawData, mode) {
 }
 
 function CostStats() {
+  const { t } = useLanguage()
   const [days, setDays] = useState(7)
   const [chartMode, setChartMode] = useState('cost')
   const [reqPage, setReqPage] = useState(1)
@@ -150,10 +152,10 @@ function CostStats() {
           className="text-2xl font-semibold tracking-tight mb-1"
           style={{ color: 'var(--text-strong)' }}
         >
-          Cost Stats
+          {t('cost.title')}
         </h1>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          LLM API usage and cost tracking ({currency})
+          {t('cost.subtitle')} ({currency})
         </p>
       </div>
 
@@ -182,7 +184,7 @@ function CostStats() {
             </div>
             <div>
               <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                Total Cost
+                {t('cost.totalCost')}
               </p>
               <p className="text-lg font-semibold" style={{ color: 'var(--text-strong)' }}>
                 {cs}{(summary?.total_cost || 0).toFixed(4)}
@@ -201,7 +203,7 @@ function CostStats() {
             </div>
             <div>
               <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                Total Tokens
+                {t('cost.totalTokens')}
               </p>
               <p className="text-lg font-semibold" style={{ color: 'var(--text-strong)' }}>
                 {(summary?.total_tokens || 0).toLocaleString()}
@@ -219,7 +221,7 @@ function CostStats() {
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium" style={{ color: 'var(--text-strong)' }}>
-              Monthly Budget
+              {t('cost.monthlyBudget')}
             </span>
             <span className="text-xs" style={{ color: 'var(--muted)' }}>
               {cs}{summary.monthly_cost.toFixed(2)} / {cs}{summary.monthly_budget.toFixed(0)}
@@ -251,11 +253,11 @@ function CostStats() {
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
-            Daily Usage
+            {t('cost.dailyUsage')}
           </h2>
           <div className="flex items-center gap-3">
             <PillToggle
-              options={CHART_MODES.map(m => ({ label: m.label, value: m.key }))}
+              options={CHART_MODES.map(m => ({ label: t(m.labelKey), value: m.key }))}
               value={chartMode}
               onChange={setChartMode}
             />
@@ -278,7 +280,7 @@ function CostStats() {
             style={{ background: 'var(--bg-elevated)' }}
           >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>
-              No usage data yet
+              {t('cost.noUsage')}
             </p>
           </div>
         ) : (
@@ -362,7 +364,7 @@ function CostStats() {
       >
         <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <h2 className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
-            Request History
+            {t('cost.requestHistory')}
           </h2>
           {reqData && (
             <span className="text-xs" style={{ color: 'var(--muted)' }}>
@@ -384,7 +386,7 @@ function CostStats() {
         ) : !reqData?.items?.length ? (
           <div className="py-12 text-center">
             <p className="text-sm" style={{ color: 'var(--muted)' }}>
-              No requests yet
+              {t('cost.noRequests')}
             </p>
           </div>
         ) : (
@@ -392,7 +394,7 @@ function CostStats() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Date', 'Workflow', 'Model', 'Tokens', 'Cost'].map(col => (
+                  {[t('cost.table.date'), t('cost.table.workflow'), t('cost.table.model'), t('cost.table.tokens'), t('cost.table.cost')].map(col => (
                     <th
                       key={col}
                       className="text-left px-5 py-2.5 text-xs font-medium"
@@ -464,7 +466,7 @@ function CostStats() {
                 style={{ borderColor: 'var(--border)' }}
               >
                 <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                  Page {reqPage} of {totalPages}
+                  {t('cost.pageOf').replace('{page}', reqPage).replace('{total}', totalPages)}
                 </span>
                 <div className="flex gap-1">
                   <button

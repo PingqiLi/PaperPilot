@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Key, Mail, Sliders, Clock, Check, AlertCircle, ChevronDown, ChevronRight, Bot, GraduationCap, Send, Loader2, History, XCircle, CheckCircle2, Sparkles, FlaskConical } from 'lucide-react'
+import { Key, Mail, Sliders, Clock, Check, AlertCircle, ChevronDown, ChevronRight, Bot, GraduationCap, Send, Loader2, History, XCircle, CheckCircle2, FlaskConical, Globe } from 'lucide-react'
 import { getSettings, updateSettings, getEmailLogs, sendTestEmail } from '../api/settings'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const SECTIONS = [
-  { key: 'api', label: 'API Configuration', icon: Key },
-  { key: 'email', label: 'Email Notification', icon: Mail },
-  { key: 'pipeline', label: 'Pipeline Parameters', icon: Sliders },
-  { key: 'prompts', label: 'Prompt Templates', icon: Sparkles },
-  { key: 'schedule', label: 'Schedule', icon: Clock },
+  { key: 'api', labelKey: 'settings.api', icon: Key },
+  { key: 'email', labelKey: 'settings.email', icon: Mail },
+  { key: 'pipeline', labelKey: 'settings.pipeline', icon: Sliders },
+  { key: 'language', labelKey: 'settings.language', icon: Globe },
+  { key: 'schedule', labelKey: 'settings.schedule', icon: Clock },
 ]
 
 const LANGUAGES = [
@@ -48,20 +49,17 @@ const KNOWN_TIMEZONES = [
   'Australia/Sydney', 'Pacific/Auckland', 'UTC',
 ]
 
-const TIMEZONES = [
-  { value: '__system__', label: `System (${SYSTEM_TZ})` },
-  ...[...new Set([...KNOWN_TIMEZONES, ...(KNOWN_TIMEZONES.includes(SYSTEM_TZ) ? [] : [SYSTEM_TZ])])]
-    .map(tz => ({ value: tz, label: tz })),
-]
+const TIMEZONES = [...new Set([...KNOWN_TIMEZONES, ...(KNOWN_TIMEZONES.includes(SYSTEM_TZ) ? [] : [SYSTEM_TZ])])]
+  .map(tz => ({ value: tz, label: tz }))
 
 const WEEKDAYS = [
-  { value: 0, label: 'Sunday' },
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
+  { value: 0, labelKey: 'settings.schedule.sunday' },
+  { value: 1, labelKey: 'settings.schedule.monday' },
+  { value: 2, labelKey: 'settings.schedule.tuesday' },
+  { value: 3, labelKey: 'settings.schedule.wednesday' },
+  { value: 4, labelKey: 'settings.schedule.thursday' },
+  { value: 5, labelKey: 'settings.schedule.friday' },
+  { value: 6, labelKey: 'settings.schedule.saturday' },
 ]
 
 function parseCron(expr) {
@@ -117,16 +115,16 @@ function SelectWrap({ value, onChange, children, style: extraStyle }) {
 const API_PROVIDERS = [
   {
     id: 'llm',
-    name: 'LLM Provider',
-    desc: 'Language model for paper scoring and digest generation',
+    nameKey: 'settings.api.llmProvider',
+    descKey: 'settings.api.llmProviderDesc',
     icon: Bot,
     keyField: 'llm_api_key',
     fields: ['llm_api_key', 'llm_base_url', 'llm_model', 'llm_price_input', 'llm_price_output'],
   },
   {
     id: 's2',
-    name: 'Semantic Scholar',
-    desc: 'Academic paper search and metadata',
+    nameKey: 'settings.api.s2',
+    descKey: 'settings.api.s2Desc',
     icon: GraduationCap,
     keyField: 's2_api_key',
     fields: ['s2_api_key'],
@@ -134,6 +132,7 @@ const API_PROVIDERS = [
 ]
 
 function ApiProviderEditor({ fields, changes, handleChange }) {
+  const { t } = useLanguage()
   const [expanded, setExpanded] = useState(null)
 
   const getVal = (key) => key in changes ? changes[key] : (fields[key]?.value ?? '')
@@ -178,7 +177,7 @@ function ApiProviderEditor({ fields, changes, handleChange }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
-                    {provider.name}
+                    {t(provider.nameKey)}
                   </span>
                   <span
                     className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
@@ -187,13 +186,13 @@ function ApiProviderEditor({ fields, changes, handleChange }) {
                       color: configured ? 'var(--ok)' : 'var(--muted)',
                     }}
                   >
-                    {configured ? 'Configured' : 'Not set'}
+                    {configured ? t('settings.configured') : t('settings.notSet')}
                   </span>
                 </div>
                 <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--muted)' }}>
                   {maskedKey && !maskedKey.match(/^\*+$/)
                     ? maskedKey
-                    : provider.desc}
+                    : t(provider.descKey)}
                 </div>
               </div>
               {open
@@ -257,6 +256,7 @@ function CronTimePicker({ cronValue, onChange, minutePresets }) {
 }
 
 function ScheduleEditor({ fields, changes, handleChange }) {
+  const { t } = useLanguage()
   const getVal = (key) => key in changes ? changes[key] : (fields[key]?.value ?? '')
 
   const monitorCron = getVal('schedule_track_cron')
@@ -274,8 +274,8 @@ function ScheduleEditor({ fields, changes, handleChange }) {
   const scheduleRows = [
     {
       key: 'schedule_track_cron',
-      title: 'Track Schedule',
-      desc: 'Check for new papers across all topics',
+      title: t('settings.schedule.trackTitle'),
+      desc: t('settings.schedule.trackDesc'),
       render: () => (
         <div className="flex items-center gap-2 flex-wrap">
           <SelectWrap
@@ -290,8 +290,8 @@ function ScheduleEditor({ fields, changes, handleChange }) {
             }}
             style={{ width: 110 }}
           >
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
+              <option value="daily">{t('settings.schedule.daily')}</option>
+              <option value="weekly">{t('settings.schedule.weekly')}</option>
           </SelectWrap>
           {isTrackWeekly && (
             <SelectWrap
@@ -303,11 +303,11 @@ function ScheduleEditor({ fields, changes, handleChange }) {
               style={{ width: 130 }}
             >
               {WEEKDAYS.map(d => (
-                <option key={d.value} value={d.value}>{d.label}</option>
+                <option key={d.value} value={d.value}>{t(d.labelKey)}</option>
               ))}
             </SelectWrap>
           )}
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>at</span>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('settings.schedule.at')}</span>
           <CronTimePicker
             cronValue={monitorCron}
             onChange={v => {
@@ -324,11 +324,11 @@ function ScheduleEditor({ fields, changes, handleChange }) {
     },
     {
       key: 'schedule_weekly_cron',
-      title: 'Weekly Digest',
-      desc: 'Generate weekly research summary',
+      title: t('settings.schedule.weeklyTitle'),
+      desc: t('settings.schedule.weeklyDesc'),
       render: () => (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>Every</span>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('settings.schedule.every')}</span>
           <SelectWrap
             value={weeklyParsed.dayOfWeek ?? 1}
             onChange={v => {
@@ -338,10 +338,10 @@ function ScheduleEditor({ fields, changes, handleChange }) {
             style={{ width: 130 }}
           >
             {WEEKDAYS.map(d => (
-              <option key={d.value} value={d.value}>{d.label}</option>
+              <option key={d.value} value={d.value}>{t(d.labelKey)}</option>
             ))}
           </SelectWrap>
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>at</span>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('settings.schedule.at')}</span>
           <CronTimePicker
             cronValue={weeklyCron}
             onChange={v => {
@@ -354,11 +354,11 @@ function ScheduleEditor({ fields, changes, handleChange }) {
     },
     {
       key: 'schedule_monthly_cron',
-      title: 'Monthly Report',
-      desc: 'Generate monthly trend analysis',
+      title: t('settings.schedule.monthlyTitle'),
+      desc: t('settings.schedule.monthlyDesc'),
       render: () => (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>On day</span>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('settings.schedule.onDay')}</span>
           <SelectWrap
             value={monthlyParsed.dayOfMonth ?? 1}
             onChange={v => {
@@ -371,7 +371,7 @@ function ScheduleEditor({ fields, changes, handleChange }) {
               <option key={i + 1} value={i + 1}>{i + 1}</option>
             ))}
           </SelectWrap>
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>of each month at</span>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('settings.schedule.ofEachMonthAt')}</span>
           <CronTimePicker
             cronValue={monthlyCron}
             onChange={v => {
@@ -390,21 +390,22 @@ function ScheduleEditor({ fields, changes, handleChange }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="text-xs font-medium block mb-1" style={{ color: 'var(--muted)' }}>
-            Timezone
+            {t('settings.schedule.timezone')}
           </label>
-          <SelectWrap
-            value={timezone === SYSTEM_TZ ? '__system__' : (timezone || '__system__')}
-            onChange={v => handleChange('schedule_timezone', v === '__system__' ? SYSTEM_TZ : v)}
-            style={{ width: '100%' }}
-          >
-            {TIMEZONES.map(tz => (
-              <option key={tz.value} value={tz.value}>{tz.label}</option>
-            ))}
-          </SelectWrap>
+            <SelectWrap
+              value={timezone === SYSTEM_TZ ? '__system__' : (timezone || '__system__')}
+              onChange={v => handleChange('schedule_timezone', v === '__system__' ? SYSTEM_TZ : v)}
+              style={{ width: '100%' }}
+            >
+              <option value="__system__">{t('settings.schedule.system').replace('{tz}', SYSTEM_TZ)}</option>
+              {TIMEZONES.map(tz => (
+                <option key={tz.value} value={tz.value}>{tz.label}</option>
+              ))}
+            </SelectWrap>
         </div>
         <div>
           <label className="text-xs font-medium block mb-1" style={{ color: 'var(--muted)' }}>
-            Enable Scheduler
+            {t('settings.schedule.enable')}
           </label>
           <Toggle
             checked={enabled === true || enabled === 'true'}
@@ -515,7 +516,8 @@ function FieldInput({ fieldKey, meta, value, onChange }) {
   )
 }
 
-function PromptSection({ fields, changes, handleChange }) {
+function LanguageSection({ fields, changes, handleChange }) {
+  const { lang, setLang, t } = useLanguage()
   const getVal = (key) => key in changes ? changes[key] : (fields[key]?.value ?? '')
   const langVal = getVal('output_language')
   const isCustomLang = langVal && !LANGUAGES.some(l => l.value === langVal)
@@ -525,7 +527,39 @@ function PromptSection({ fields, changes, handleChange }) {
     <div className="space-y-4">
       <div>
         <label className="text-xs font-medium block mb-1" style={{ color: 'var(--muted)' }}>
-          Output Language
+          {t('settings.language.ui')}
+        </label>
+        <div className="inline-flex rounded-lg p-0.5" style={{ background: 'var(--bg-muted)' }}>
+          <button
+            type="button"
+            onClick={() => setLang('zh')}
+            className="px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer"
+            style={{
+              background: lang === 'zh' ? 'var(--accent)' : 'transparent',
+              color: lang === 'zh' ? 'var(--accent-foreground)' : 'var(--muted)',
+              border: 'none',
+            }}
+          >
+            {t('settings.language.uiZh')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang('en')}
+            className="px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer"
+            style={{
+              background: lang === 'en' ? 'var(--accent)' : 'transparent',
+              color: lang === 'en' ? 'var(--accent-foreground)' : 'var(--muted)',
+              border: 'none',
+            }}
+          >
+            {t('settings.language.uiEn')}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--muted)' }}>
+          {t('settings.language.output')}
         </label>
         <div className="flex items-center gap-2">
           <SelectWrap
@@ -544,7 +578,7 @@ function PromptSection({ fields, changes, handleChange }) {
             {LANGUAGES.map(l => (
               <option key={l.value} value={l.value}>{l.label}</option>
             ))}
-            <option value="__custom__">Custom...</option>
+            <option value="__custom__">{t('settings.language.custom')}</option>
           </SelectWrap>
           {showCustomLang && (
             <input
@@ -559,7 +593,7 @@ function PromptSection({ fields, changes, handleChange }) {
           )}
         </div>
         <p className="text-[11px] mt-1" style={{ color: 'var(--muted)', opacity: 0.7 }}>
-          Language for LLM-generated text (scoring reasons, digests, analysis)
+          {t('settings.language.outputDesc')}
         </p>
       </div>
 
@@ -568,8 +602,7 @@ function PromptSection({ fields, changes, handleChange }) {
         style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}
       >
         <p className="text-xs" style={{ color: 'var(--muted)', lineHeight: 1.6 }}>
-          PaperPilot uses carefully tuned prompts for scoring, digests, and analysis.
-          Advanced users can customize prompts by editing files in <code
+          {t('settings.language.note')} <code
             className="text-[11px] px-1 py-0.5 rounded"
             style={{ background: 'var(--bg-elevated)', color: 'var(--text-strong)' }}
           >src/prompts/</code>
@@ -580,6 +613,7 @@ function PromptSection({ fields, changes, handleChange }) {
 }
 
 function EmailHistory() {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
@@ -605,7 +639,7 @@ function EmailHistory() {
           style={{ background: 'none', border: 'none', color: 'var(--muted)', padding: 0 }}
         >
           <History size={12} />
-          Send History
+          {t('settings.email.sendHistory')}
           <ChevronRight size={12} />
         </button>
         <div className="ml-auto">
@@ -616,7 +650,7 @@ function EmailHistory() {
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
           >
             {testMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-            Send Test
+            {t('settings.email.sendTest')}
           </button>
         </div>
       </div>
@@ -632,7 +666,7 @@ function EmailHistory() {
           style={{ background: 'none', border: 'none', color: 'var(--muted)', padding: 0 }}
         >
           <History size={12} />
-          Send History
+          {t('settings.email.sendHistory')}
           <ChevronDown size={12} />
         </button>
         <button
@@ -642,7 +676,7 @@ function EmailHistory() {
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
         >
           {testMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-          Send Test
+          {t('settings.email.sendTest')}
         </button>
       </div>
 
@@ -666,11 +700,11 @@ function EmailHistory() {
           <table className="w-full text-xs">
             <thead>
               <tr style={{ background: 'var(--bg-elevated)' }}>
-                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>Time</th>
-                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>Topic</th>
-                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>Type</th>
-                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>Recipient</th>
-                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>Status</th>
+                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>{t('settings.email.time')}</th>
+                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>{t('settings.email.topic')}</th>
+                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>{t('settings.email.type')}</th>
+                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>{t('settings.email.recipient')}</th>
+                <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--muted)' }}>{t('settings.email.status')}</th>
               </tr>
             </thead>
             <tbody>
@@ -696,7 +730,7 @@ function EmailHistory() {
                         color: log.digest_type === 'test' ? 'var(--muted)' : 'var(--accent)',
                       }}
                     >
-                      {{ field_overview: 'Overview', weekly: 'Weekly', monthly: 'Monthly', test: 'Test' }[log.digest_type] || log.digest_type || '—'}
+                      {{ field_overview: t('settings.email.overview'), weekly: t('settings.email.weekly'), monthly: t('settings.email.monthly'), test: t('settings.email.test') }[log.digest_type] || log.digest_type || '—'}
                     </span>
                   </td>
                   <td className="px-3 py-2" style={{ color: 'var(--muted)' }}>
@@ -705,7 +739,7 @@ function EmailHistory() {
                   <td className="px-3 py-2">
                     {log.status === 'sent' ? (
                       <span className="flex items-center gap-1" style={{ color: 'var(--ok)' }}>
-                        <CheckCircle2 size={12} /> Sent
+                        <CheckCircle2 size={12} /> {t('settings.email.sent')}
                       </span>
                     ) : (
                       <span
@@ -713,7 +747,7 @@ function EmailHistory() {
                         style={{ color: 'var(--danger)' }}
                         title={log.error || ''}
                       >
-                        <XCircle size={12} /> Failed
+                        <XCircle size={12} /> {t('settings.email.failed')}
                       </span>
                     )}
                   </td>
@@ -724,7 +758,7 @@ function EmailHistory() {
         </div>
       ) : (
         <p className="text-xs py-4 text-center" style={{ color: 'var(--muted)' }}>
-          No emails sent yet
+          {t('settings.email.none')}
         </p>
       )}
     </div>
@@ -751,6 +785,7 @@ function EmailSection({ fields, changes, handleChange }) {
 }
 
 function PipelineSection({ fields, changes, handleChange }) {
+  const { t } = useLanguage()
   const regularFields = {}
   const experimentalFields = {}
 
@@ -790,16 +825,14 @@ function PipelineSection({ fields, changes, handleChange }) {
               className="text-xs px-2 py-0.5 rounded-full font-medium"
               style={{ background: '#f59e0b18', color: '#f59e0b' }}
             >
-              Experimental
+              {t('settings.pipeline.experimental')}
             </span>
             <span className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
-              Auto Paper Analysis
+              {t('settings.pipeline.autoAnalysis')}
             </span>
           </div>
           <p className="text-xs mb-3" style={{ color: 'var(--muted)', lineHeight: 1.5 }}>
-            When enabled, papers scoring above the threshold are automatically analyzed after each
-            Initialize / Track run. Uses abstract only — no full text, figures, or tables. Results
-            are less detailed than manual analysis with full paper content.
+            {t('settings.pipeline.autoAnalysisDesc')}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Object.entries(experimentalFields).map(([fieldKey, meta]) => (
@@ -819,6 +852,7 @@ function PipelineSection({ fields, changes, handleChange }) {
 }
 
 function AppSettings() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [changes, setChanges] = useState({})
   const [message, setMessage] = useState(null)
@@ -841,10 +875,10 @@ function AppSettings() {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
       queryClient.invalidateQueries({ queryKey: ['costStats'] })
       setChanges({})
-      setMessage({ type: 'success', text: 'Settings saved' })
+      setMessage({ type: 'success', text: t('settings.saved') })
     },
     onError: (err) => {
-      setMessage({ type: 'error', text: err?.response?.data?.detail || 'Failed to save' })
+      setMessage({ type: 'error', text: err?.response?.data?.detail || t('settings.failedToSave') })
     },
   })
 
@@ -880,10 +914,10 @@ function AppSettings() {
           className="text-2xl font-semibold tracking-tight mb-1"
           style={{ color: 'var(--text-strong)' }}
         >
-          Settings
+          {t('settings.title')}
         </h1>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Configure API keys, email, pipeline parameters, and scheduling
+          {t('settings.subtitle')}
         </p>
       </div>
 
@@ -912,8 +946,8 @@ function AppSettings() {
         </div>
       ) : settings && (
         <>
-          {SECTIONS.map(({ key: catKey, label, icon: Icon }) => {
-            const fields = settings[catKey]
+          {SECTIONS.map(({ key: catKey, labelKey, icon: Icon }) => {
+            const fields = catKey === 'language' ? settings.prompts : settings[catKey]
             if (!fields) return null
             return (
               <div
@@ -924,11 +958,11 @@ function AppSettings() {
                 <div className="flex items-center gap-2 mb-4">
                   <Icon size={18} style={{ color: 'var(--accent)' }} />
                   <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-                    {label}
+                    {t(labelKey)}
                   </h2>
                 </div>
-                {catKey === 'prompts' ? (
-                  <PromptSection fields={fields} changes={changes} handleChange={handleChange} />
+                {catKey === 'language' ? (
+                  <LanguageSection fields={fields} changes={changes} handleChange={handleChange} />
                 ) : catKey === 'api' ? (
                   <ApiProviderEditor fields={fields} changes={changes} handleChange={handleChange} />
                 ) : catKey === 'schedule' ? (
@@ -965,7 +999,7 @@ function AppSettings() {
                   border: '1px solid var(--border)',
                 }}
               >
-                Discard
+                {t('settings.discard')}
               </button>
             )}
             <button
@@ -978,7 +1012,7 @@ function AppSettings() {
                 border: 'none',
               }}
             >
-              {mutation.isPending ? 'Saving...' : 'Save Changes'}
+              {mutation.isPending ? t('settings.saving') : t('settings.saveChanges')}
             </button>
           </div>
         </>

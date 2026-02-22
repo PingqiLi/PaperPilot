@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Sparkles, Save, ArrowLeft, Loader2, X, Plus } from 'lucide-react'
 import { generateDraft, createRuleset, createRun } from '../api/rulesets'
 import { useTasks } from '../contexts/TaskContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import LlmLoadingBanner from '../components/LlmLoadingBanner'
 
 function TagInput({ tags, onChange, placeholder }) {
@@ -76,6 +77,7 @@ function TagInput({ tags, onChange, placeholder }) {
 
 function RuleSetWizard() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const { addToast } = useTasks()
   const [step, setStep] = useState('topic')
@@ -116,17 +118,17 @@ function RuleSetWizard() {
         style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
       >
         <ArrowLeft size={16} />
-        Back
+        {t('ruleSet.wizard.back')}
       </button>
 
       <h1
         className="text-2xl font-semibold tracking-tight mb-2"
         style={{ color: 'var(--text-strong)' }}
       >
-        New Topic
+        {t('ruleSet.wizard.newTopic')}
       </h1>
       <p className="text-sm mb-8" style={{ color: 'var(--muted)' }}>
-        Describe your research interest and we'll auto-generate search parameters
+        {t('ruleSet.wizard.subtitle')}
       </p>
 
       {step === 'topic' && (
@@ -138,7 +140,7 @@ function RuleSetWizard() {
             className="block text-sm font-medium mb-2"
             style={{ color: 'var(--text-strong)' }}
           >
-            What are you researching?
+            {t('ruleSet.wizard.whatResearch')}
           </label>
           <textarea
             value={topicSentence}
@@ -153,7 +155,7 @@ function RuleSetWizard() {
             }}
           />
           <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>
-            Be specific — this helps generate better search queries and scoring criteria
+            {t('ruleSet.wizard.topicTip')}
           </p>
           <div className="mt-4 flex justify-end">
             <button
@@ -171,14 +173,14 @@ function RuleSetWizard() {
               ) : (
                 <Sparkles size={16} />
               )}
-              {draftMutation.isPending ? 'Generating...' : 'Generate Draft'}
+              {draftMutation.isPending ? t('ruleSet.wizard.generating') : t('ruleSet.wizard.generateDraft')}
             </button>
           </div>
           {draftMutation.isPending && (
             <div className="mt-4">
               <LlmLoadingBanner
-                message="Generating topic configuration..."
-                detail="LLM is analyzing your research interest. This typically takes 1-2 minutes."
+                message={t('ruleSet.wizard.loadingGenerateMsg')}
+                detail={t('ruleSet.wizard.loadingGenerateDetail')}
               />
             </div>
           )}
@@ -188,7 +190,7 @@ function RuleSetWizard() {
               style={{ background: 'var(--danger-subtle)', borderColor: 'var(--danger)' }}
             >
               <span className="text-sm" style={{ color: 'var(--danger)' }}>
-                Failed to generate draft. {draftMutation.error?.response?.data?.detail || draftMutation.error?.message || 'Please try again.'}
+                {t('ruleSet.wizard.failedGenerate').replace('{error}', draftMutation.error?.response?.data?.detail || draftMutation.error?.message || 'Please try again.')}
               </span>
             </div>
           )}
@@ -205,7 +207,7 @@ function RuleSetWizard() {
               className="block text-sm font-medium mb-2"
               style={{ color: 'var(--text-strong)' }}
             >
-              Name
+              {t('ruleSet.wizard.name')}
             </label>
             <input
               value={draft.name}
@@ -227,7 +229,7 @@ function RuleSetWizard() {
               className="block text-sm font-medium mb-2"
               style={{ color: 'var(--text-strong)' }}
             >
-              Topic
+              {t('ruleSet.wizard.topic')}
             </label>
             <textarea
               value={draft.topic_sentence}
@@ -250,7 +252,7 @@ function RuleSetWizard() {
               className="block text-sm font-medium mb-2"
               style={{ color: 'var(--text-strong)' }}
             >
-              ArXiv Categories
+              {t('ruleSet.wizard.arxivCategories')}
             </label>
             <TagInput
               tags={draft.categories || []}
@@ -267,7 +269,7 @@ function RuleSetWizard() {
               className="block text-sm font-medium mb-2"
               style={{ color: 'var(--text-strong)' }}
             >
-              Include Keywords
+              {t('ruleSet.wizard.includeKeywords')}
             </label>
             <TagInput
               tags={draft.keywords_include || []}
@@ -284,7 +286,7 @@ function RuleSetWizard() {
               className="block text-sm font-medium mb-2"
               style={{ color: 'var(--text-strong)' }}
             >
-              Exclude Keywords
+              {t('ruleSet.wizard.excludeKeywords')}
             </label>
             <TagInput
               tags={draft.keywords_exclude || []}
@@ -301,7 +303,7 @@ function RuleSetWizard() {
               className="block text-sm font-medium mb-2"
               style={{ color: 'var(--text-strong)' }}
             >
-              Search Queries
+              {t('ruleSet.wizard.searchQueries')}
             </label>
             <TagInput
               tags={draft.search_queries || []}
@@ -318,7 +320,7 @@ function RuleSetWizard() {
               className="block text-sm font-medium mb-2"
               style={{ color: 'var(--text-strong)' }}
             >
-              论文来源
+              {t('ruleSet.wizard.source')}
             </label>
             <select
               value={draft.source_filter || 'all'}
@@ -330,12 +332,12 @@ function RuleSetWizard() {
                 color: 'var(--text)',
               }}
             >
-              <option value="all">不限来源</option>
-              <option value="arxiv">仅 ArXiv（推荐 CS/AI/ML）</option>
-              <option value="open_access">开放获取（ArXiv + PMC）</option>
+              <option value="all">{t('ruleSet.wizard.sourceAll')}</option>
+              <option value="arxiv">{t('ruleSet.wizard.sourceArxiv')}</option>
+              <option value="open_access">{t('ruleSet.wizard.sourceOpenAccess')}</option>
             </select>
             <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>
-              选择"仅 ArXiv"可确保所有论文都能直接阅读全文
+              {t('ruleSet.wizard.sourceTip')}
             </p>
           </div>
 
@@ -349,7 +351,7 @@ function RuleSetWizard() {
                 color: 'var(--text)',
               }}
             >
-              Back
+              {t('ruleSet.wizard.back')}
             </button>
             <button
               onClick={() => saveMutation.mutate()}
@@ -366,14 +368,14 @@ function RuleSetWizard() {
               ) : (
                 <Save size={16} />
               )}
-              {saveMutation.isPending ? 'Creating & Initializing...' : 'Create Topic'}
+              {saveMutation.isPending ? t('ruleSet.wizard.creating') : t('ruleSet.wizard.createTopic')}
             </button>
           </div>
           {saveMutation.isPending && (
             <div className="mt-4">
               <LlmLoadingBanner
-                message="Creating topic and starting initialization..."
-                detail="Setting up your topic and launching the paper discovery pipeline."
+                message={t('ruleSet.wizard.loadingCreateMsg')}
+                detail={t('ruleSet.wizard.loadingCreateDetail')}
               />
             </div>
           )}
@@ -383,7 +385,7 @@ function RuleSetWizard() {
               style={{ background: 'var(--danger-subtle)', borderColor: 'var(--danger)' }}
             >
               <span className="text-sm" style={{ color: 'var(--danger)' }}>
-                Failed to create topic. {saveMutation.error?.response?.data?.detail || saveMutation.error?.message || 'Please try again.'}
+                {t('ruleSet.wizard.failedCreate').replace('{error}', saveMutation.error?.response?.data?.detail || saveMutation.error?.message || 'Please try again.')}
               </span>
             </div>
           )}

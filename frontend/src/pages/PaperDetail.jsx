@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { getPaperDetail, analyzePaper, updatePaperStatus } from '../api/rulesets'
 import { useTasks } from '../contexts/TaskContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import LlmLoadingBanner from '../components/LlmLoadingBanner'
 
 function Badge({ children, color }) {
@@ -69,12 +70,12 @@ function AnalysisSection({ icon: Icon, title, children, color }) {
   )
 }
 
-function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
+function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing, t }) {
   if (isAnalyzing) {
     return (
       <LlmLoadingBanner
-        message="正在分析论文..."
-        detail="LLM 正在读取论文内容并生成深度分析报告，通常需要 30-90 秒。"
+        message={t('paperDetail.analyzing')}
+        detail={t('paperDetail.analyzingDetail')}
       />
     )
   }
@@ -87,10 +88,10 @@ function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
       >
         <Sparkles size={36} className="mx-auto mb-3" style={{ color: 'var(--muted)' }} />
         <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-strong)' }}>
-          尚未生成分析报告
+          {t('paperDetail.noAnalysis')}
         </p>
         <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
-          点击下方按钮，AI 将读取论文全文并生成结构化深度分析
+          {t('paperDetail.noAnalysisDesc')}
         </p>
         <button
           onClick={onReanalyze}
@@ -98,7 +99,7 @@ function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
           style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', border: 'none' }}
         >
           <Sparkles size={14} />
-          生成分析报告
+          {t('paperDetail.generateAnalysis')}
         </button>
       </div>
     )
@@ -113,13 +114,13 @@ function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
         <div className="flex items-center gap-2">
           <Sparkles size={16} style={{ color: 'var(--accent)' }} />
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-            AI 深度分析
+            {t('paperDetail.analysisTitle')}
           </h2>
           {analysis._source === 'full_text' && (
-            <Badge color="green">全文分析</Badge>
+            <Badge color="green">{t('paperDetail.fullTextAnalysis')}</Badge>
           )}
           {analysis._source === 'abstract_only' && (
-            <Badge color="yellow">摘要分析</Badge>
+            <Badge color="yellow">{t('paperDetail.abstractAnalysis')}</Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -132,7 +133,7 @@ function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
             onClick={onReanalyze}
             className="p-1.5 rounded-md cursor-pointer"
             style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
-            title="重新分析"
+            title={t('paperDetail.reanalyze')}
           >
             <RefreshCw size={13} />
           </button>
@@ -148,12 +149,12 @@ function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
         </div>
       )}
 
-      <AnalysisSection icon={Lightbulb} title="核心问题" color="blue">
+      <AnalysisSection icon={Lightbulb} title={t('paperDetail.coreProblem')} color="blue">
         <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{analysis.problem}</p>
       </AnalysisSection>
 
       {analysis.innovations?.length > 0 && (
-        <AnalysisSection icon={Sparkles} title="创新点" color="purple">
+        <AnalysisSection icon={Sparkles} title={t('paperDetail.innovations')} color="purple">
           <ul className="space-y-1.5">
             {analysis.innovations.map((item, i) => (
               <li key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text)' }}>
@@ -169,13 +170,13 @@ function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
       )}
 
       {analysis.method_summary && (
-        <AnalysisSection icon={BookOpen} title="方法概述" color="blue">
+        <AnalysisSection icon={BookOpen} title={t('paperDetail.methodSummary')} color="blue">
           <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{analysis.method_summary}</p>
         </AnalysisSection>
       )}
 
       {analysis.experiments && (
-        <AnalysisSection icon={FlaskConical} title="实验效果" color="green">
+        <AnalysisSection icon={FlaskConical} title={t('paperDetail.experiments')} color="green">
           {analysis.experiments.datasets?.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {analysis.experiments.datasets.map((d, i) => (
@@ -199,7 +200,7 @@ function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
       )}
 
       {analysis.limitations?.length > 0 && (
-        <AnalysisSection icon={AlertTriangle} title="局限性" color="yellow">
+        <AnalysisSection icon={AlertTriangle} title={t('paperDetail.limitations')} color="yellow">
           <ul className="space-y-1">
             {analysis.limitations.map((l, i) => (
               <li key={i} className="text-sm flex items-start gap-1.5" style={{ color: 'var(--text)' }}>
@@ -211,7 +212,7 @@ function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
       )}
 
       {analysis.conclusion && (
-        <AnalysisSection icon={Quote} title="结论与影响" color="blue">
+        <AnalysisSection icon={Quote} title={t('paperDetail.conclusionImpact')} color="blue">
           <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{analysis.conclusion}</p>
         </AnalysisSection>
       )}
@@ -221,7 +222,7 @@ function AnalysisPanel({ analysis, analyzedAt, onReanalyze, isAnalyzing }) {
           className="mt-4 p-3 rounded-lg text-xs"
           style={{ background: 'var(--bg-elevated)', color: 'var(--muted)' }}
         >
-          <span className="font-medium" style={{ color: 'var(--text)' }}>阅读建议：</span>
+          <span className="font-medium" style={{ color: 'var(--text)' }}>{t('paperDetail.readingAdvice')}</span>
           {analysis.reading_notes}
         </div>
       )}
@@ -234,6 +235,7 @@ function PaperDetail() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { addToast } = useTasks()
+  const { t } = useLanguage()
   const [analyzing, setAnalyzing] = useState(false)
 
   const { data: paper, isLoading, refetch } = useQuery({
@@ -297,7 +299,7 @@ function PaperDetail() {
         style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
       >
         <ArrowLeft size={16} />
-        Back to topic
+        {t('paperDetail.backToTopic')}
       </button>
 
       <div
@@ -321,13 +323,13 @@ function PaperDetail() {
                   <Building2 size={12} /> {paper.venue}
                 </span>
               )}
-              <span>{paper.citation_count} citations</span>
+              <span>{paper.citation_count} {t('paperDetail.citations')}</span>
               {paper.influential_citation_count > 0 && (
-                <span>{paper.influential_citation_count} influential</span>
+                <span>{paper.influential_citation_count} {t('paperDetail.influential')}</span>
               )}
-              <span>{(paper.impact_score || 0).toFixed(2)} impact</span>
-               {paper.is_survey && <Badge color="yellow">Survey</Badge>}
-               {paper.source === 'track' && <Badge color="green">New</Badge>}
+              <span>{(paper.impact_score || 0).toFixed(2)} {t('paperDetail.impact')}</span>
+               {paper.is_survey && <Badge color="yellow">{t('paperDetail.survey')}</Badge>}
+               {paper.source === 'track' && <Badge color="green">{t('paperDetail.new')}</Badge>}
             </div>
             {paper.authors?.length > 0 && (
               <div className="flex items-start gap-1.5 text-xs mb-3" style={{ color: 'var(--muted)' }}>
@@ -348,7 +350,7 @@ function PaperDetail() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
                 style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', textDecoration: 'none' }}
               >
-                <ExternalLink size={12} /> View on ArXiv
+                <ExternalLink size={12} /> {t('paperDetail.viewOnArxiv')}
               </a>
               {pdfUrl && (
                 <a
@@ -368,7 +370,7 @@ function PaperDetail() {
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs cursor-pointer"
                   style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)' }}
                 >
-                  <Star size={12} /> Favorite
+                  <Star size={12} /> {t('paperDetail.favorite')}
                 </button>
               )}
               {paper.status !== 'archived' && (
@@ -377,7 +379,7 @@ function PaperDetail() {
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs cursor-pointer"
                   style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)' }}
                 >
-                  <Archive size={12} /> Archive
+                  <Archive size={12} /> {t('paperDetail.archive')}
                 </button>
               )}
               {paper.status !== 'inbox' && (
@@ -386,7 +388,7 @@ function PaperDetail() {
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs cursor-pointer"
                   style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)' }}
                 >
-                  <Inbox size={12} /> Inbox
+                  <Inbox size={12} /> {t('paperDetail.inbox')}
                 </button>
               )}
             </div>
@@ -400,7 +402,7 @@ function PaperDetail() {
           style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
         >
           <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-strong)' }}>
-            Relevance Assessment
+            {t('paperDetail.relevanceAssessment')}
           </h2>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{paper.llm_reason}</p>
         </div>
@@ -411,7 +413,7 @@ function PaperDetail() {
           className="rounded-xl border p-5 mb-5"
           style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
         >
-          <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-strong)' }}>Abstract</h2>
+          <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-strong)' }}>{t('paperDetail.abstract')}</h2>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{paper.abstract}</p>
         </div>
       )}
@@ -421,6 +423,7 @@ function PaperDetail() {
         analyzedAt={paper.analyzed_at}
         onReanalyze={handleAnalyze}
         isAnalyzing={analyzing}
+        t={t}
       />
     </div>
   )

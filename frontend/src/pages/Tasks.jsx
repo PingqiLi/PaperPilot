@@ -6,13 +6,7 @@ import {
   ArrowRight, ChevronDown, ChevronUp, ListTodo,
 } from 'lucide-react'
 import { getTasks } from '../api/tasks'
-
-const TYPE_LABELS = {
-  topic_init: 'Topic Init',
-  track: 'Track',
-  digest: 'Digest',
-  paper_analysis: 'Analysis',
-}
+import { useLanguage } from '../contexts/LanguageContext'
 
 const TYPE_COLORS = {
   topic_init: { bg: 'var(--accent-subtle)', color: 'var(--accent)' },
@@ -38,11 +32,12 @@ function StatusIcon({ status }) {
 }
 
 function StatusLabel({ status }) {
+  const { t } = useLanguage()
   const labels = {
-    running: 'Running',
-    awaiting_approval: 'Awaiting Approval',
-    completed: 'Completed',
-    failed: 'Failed',
+    running: t('tasks.status.running'),
+    awaiting_approval: t('tasks.status.awaitingApproval'),
+    completed: t('tasks.status.completed'),
+    failed: t('tasks.status.failed'),
   }
   const colors = {
     running: 'var(--accent)',
@@ -86,9 +81,16 @@ function formatTime(dateStr) {
 
 function TaskRow({ task }) {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const [showError, setShowError] = useState(false)
   const navTarget = getNavTarget(task)
   const tc = TYPE_COLORS[task.task_type] || TYPE_COLORS.topic_init
+  const typeLabels = {
+    topic_init: t('tasks.type.topicInit'),
+    track: t('tasks.type.track'),
+    digest: t('tasks.type.digest'),
+    paper_analysis: t('tasks.type.analysis'),
+  }
   const isActive = task.status === 'running' || task.status === 'awaiting_approval'
 
   return (
@@ -107,7 +109,7 @@ function TaskRow({ task }) {
           className="px-2 py-0.5 rounded-md text-[11px] font-medium"
           style={{ background: tc.bg, color: tc.color }}
         >
-          {TYPE_LABELS[task.task_type] || task.task_type}
+          {typeLabels[task.task_type] || task.task_type}
         </span>
         <span className="text-sm font-medium flex-1 min-w-0 truncate" style={{ color: 'var(--text-strong)' }}>
           {task.title}
@@ -131,7 +133,7 @@ function TaskRow({ task }) {
             className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs cursor-pointer"
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
           >
-            View <ArrowRight size={11} />
+            {t('tasks.view')} <ArrowRight size={11} />
           </button>
         )}
       </div>
@@ -169,6 +171,7 @@ function TaskRow({ task }) {
 }
 
 function Tasks() {
+  const { t } = useLanguage()
   const { data, isLoading } = useQuery({
     queryKey: ['allTasks'],
     queryFn: () => getTasks({ limit: 100 }),
@@ -185,10 +188,10 @@ function Tasks() {
     <div className="p-8 max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-strong)' }}>
-          Tasks
+          {t('tasks.title')}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-          Track background operations
+          {t('tasks.subtitle')}
         </p>
       </div>
 
@@ -215,10 +218,10 @@ function Tasks() {
         >
           <ListTodo size={40} className="mx-auto mb-3" style={{ color: 'var(--muted)', opacity: 0.5 }} />
           <p className="text-sm" style={{ color: 'var(--muted)' }}>
-            No tasks yet
+            {t('tasks.emptyTitle')}
           </p>
           <p className="text-xs mt-1" style={{ color: 'var(--muted)', opacity: 0.7 }}>
-            Background tasks will appear here when you initialize topics, track papers, or generate digests
+            {t('tasks.emptyDesc')}
           </p>
         </div>
       )}

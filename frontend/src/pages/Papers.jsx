@@ -4,19 +4,20 @@ import {
   ExternalLink, Star, Archive, Inbox, BookOpen, Sparkles,
 } from 'lucide-react'
 import { getGlobalPapers, getRulesets, updatePaperStatus } from '../api/rulesets'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const STATUS_FILTERS = [
-  { key: 'highlighted', label: 'Highlights' },
-  { key: null, label: 'All' },
-  { key: 'favorited', label: 'Favorites' },
-  { key: 'archived', label: 'Archived' },
+  { key: 'highlighted', labelKey: 'papers.filter.highlights' },
+  { key: null, labelKey: 'papers.filter.all' },
+  { key: 'favorited', labelKey: 'papers.filter.favorites' },
+  { key: 'archived', labelKey: 'papers.filter.archived' },
 ]
 
 const SORT_OPTIONS = [
-  { key: 'llm_score', label: 'Score' },
-  { key: 'impact_score', label: 'Impact' },
-  { key: 'citation_count', label: 'Citations' },
-  { key: 'published_date', label: 'Date' },
+  { key: 'llm_score', labelKey: 'papers.sort.score' },
+  { key: 'impact_score', labelKey: 'papers.sort.impact' },
+  { key: 'citation_count', labelKey: 'papers.sort.citations' },
+  { key: 'published_date', labelKey: 'papers.sort.date' },
 ]
 
 function ScoreBadge({ score }) {
@@ -36,6 +37,7 @@ function ScoreBadge({ score }) {
 }
 
 function PaperCard({ paper, topicName, onStatusChange }) {
+  const { t } = useLanguage()
   const arxivUrl = paper.arxiv_id?.startsWith('s2:')
     ? `https://www.semanticscholar.org/paper/${paper.arxiv_id.slice(3)}`
     : `https://arxiv.org/abs/${paper.arxiv_id}`
@@ -75,13 +77,13 @@ function PaperCard({ paper, topicName, onStatusChange }) {
             )}
             {paper.is_survey && (
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium" style={{ background: 'var(--warning-subtle, #fef3c7)', color: 'var(--warning, #d97706)' }}>
-                综述
+                {t('papers.survey')}
               </span>
             )}
             {paper.venue && <span>{paper.venue}</span>}
             {paper.year && <span>{paper.year}</span>}
-            <span>{paper.citation_count || 0} cit.</span>
-            <span>{(paper.impact_score || 0).toFixed(2)} impact</span>
+            <span>{paper.citation_count || 0} {t('papers.cit')}</span>
+            <span>{(paper.impact_score || 0).toFixed(2)} {t('papers.impactWord')}</span>
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
@@ -90,7 +92,7 @@ function PaperCard({ paper, topicName, onStatusChange }) {
               onClick={() => onStatusChange(paper, 'favorited')}
               className="p-1.5 rounded-md cursor-pointer"
               style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
-              title="Favorite"
+              title={t('papers.favorite')}
             >
               <Star size={14} />
             </button>
@@ -100,7 +102,7 @@ function PaperCard({ paper, topicName, onStatusChange }) {
               onClick={() => onStatusChange(paper, 'archived')}
               className="p-1.5 rounded-md cursor-pointer"
               style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
-              title="Archive"
+              title={t('papers.archive')}
             >
               <Archive size={14} />
             </button>
@@ -110,7 +112,7 @@ function PaperCard({ paper, topicName, onStatusChange }) {
               onClick={() => onStatusChange(paper, 'inbox')}
               className="p-1.5 rounded-md cursor-pointer"
               style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
-              title="Move to inbox"
+              title={t('papers.moveToInbox')}
             >
               <Inbox size={14} />
             </button>
@@ -122,6 +124,7 @@ function PaperCard({ paper, topicName, onStatusChange }) {
 }
 
 function Papers() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
 
   const [statusFilter, setStatusFilter] = useState('highlighted')
@@ -168,10 +171,10 @@ function Papers() {
           className="text-2xl font-semibold tracking-tight mb-1"
           style={{ color: 'var(--text-strong)' }}
         >
-          Highlights
+          {t('papers.title')}
         </h1>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Top-scored papers across all topics
+          {t('papers.subtitle')}
         </p>
       </div>
 
@@ -181,7 +184,7 @@ function Papers() {
             const active = statusFilter === f.key
             return (
               <button
-                key={f.label}
+                key={f.labelKey}
                 onClick={() => { setStatusFilter(f.key); setPage(1) }}
                 className="px-3 py-1.5 rounded-md text-xs cursor-pointer"
                 style={{
@@ -190,7 +193,7 @@ function Papers() {
                   border: '1px solid var(--border)',
                 }}
               >
-                {f.label}
+                {t(f.labelKey)}
               </button>
             )
           })}
@@ -206,7 +209,7 @@ function Papers() {
           }}
         >
           {SORT_OPTIONS.map(s => (
-            <option key={s.key} value={s.key}>{s.label}</option>
+            <option key={s.key} value={s.key}>{t(s.labelKey)}</option>
           ))}
         </select>
       </div>
@@ -241,10 +244,10 @@ function Papers() {
                 className="px-3 py-1.5 rounded-md text-sm cursor-pointer disabled:opacity-30"
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
               >
-                Previous
+                {t('papers.previous')}
               </button>
               <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                Page {page} of {totalPages}
+                {t('papers.pageOf').replace('{page}', page).replace('{total}', totalPages)}
               </span>
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
@@ -252,7 +255,7 @@ function Papers() {
                 className="px-3 py-1.5 rounded-md text-sm cursor-pointer disabled:opacity-30"
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
               >
-                Next
+                {t('papers.next')}
               </button>
             </div>
           )}
@@ -267,16 +270,16 @@ function Papers() {
             : <BookOpen size={48} className="mx-auto mb-4" style={{ color: 'var(--muted)' }} />
           }
           <p className="text-lg font-medium mb-2" style={{ color: 'var(--text-strong)' }}>
-            {statusFilter === 'highlighted' ? 'No highlights yet'
-              : statusFilter === 'favorited' ? 'No favorites yet'
-              : 'No papers found'}
+            {statusFilter === 'highlighted' ? t('papers.noHighlights')
+              : statusFilter === 'favorited' ? t('papers.noFavorites')
+              : t('papers.noPapers')}
           </p>
           <p className="text-sm" style={{ color: 'var(--muted)' }}>
             {statusFilter === 'highlighted'
-              ? 'Create a topic to discover high-scoring papers'
+              ? t('papers.emptyHighlights')
               : statusFilter === 'favorited'
-                ? 'Star papers to save them here'
-                : 'Try a different filter or create a new topic'}
+                ? t('papers.emptyFavorites')
+                : t('papers.emptyDefault')}
           </p>
         </div>
       )}
