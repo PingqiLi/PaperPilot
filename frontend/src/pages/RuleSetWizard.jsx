@@ -237,6 +237,7 @@ function RuleSetWizard() {
           <LlmLoadingBanner
             message={t('ruleSet.wizard.loadingGenerateMsg')}
             detail={t('ruleSet.wizard.loadingGenerateDetail')}
+            startedAt={taskData?.created_at}
           />
           {taskData?.status === 'failed' && (
             <div

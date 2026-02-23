@@ -1,14 +1,30 @@
 import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 
-function LlmLoadingBanner({ message, detail }) {
-  const [elapsed, setElapsed] = useState(0)
-
+function LlmLoadingBanner({ message, detail, startedAt }) {
+  const parseUtc = (s) => {
+    if (!s) return null
+    return new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z')
+  }
+  const [elapsed, setElapsed] = useState(() => {
+    const start = parseUtc(startedAt)
+    if (start) {
+      return Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000))
+    }
+    return 0
+  })
   useEffect(() => {
-    setElapsed(0)
-    const timer = setInterval(() => setElapsed(s => s + 1), 1000)
+    const start = parseUtc(startedAt)
+    const getElapsed = () => {
+      if (start) {
+        return Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000))
+      }
+      return 0
+    }
+    setElapsed(getElapsed())
+    const timer = setInterval(() => setElapsed(getElapsed()), 1000)
     return () => clearInterval(timer)
-  }, [message])
+  }, [startedAt])
 
   const minutes = Math.floor(elapsed / 60)
   const seconds = elapsed % 60
