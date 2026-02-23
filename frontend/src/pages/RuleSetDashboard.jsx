@@ -15,6 +15,7 @@ import {
   getDigests, createDigest, updateRuleset, exportDigestMarkdown, getReinitPreview,
   deleteRuleset, bulkUpdatePaperStatus, exportBibtex, addPaperToTopic, getTopicOverview,
 } from '../api/rulesets'
+import { qk, invalidate } from '../api/queryKeys'
 
 function ScoreBadge({ score }) {
   if (score == null) return null
@@ -169,7 +170,7 @@ function PaperCard({ paper, rulesetId, onStatusChange, selected, onToggleSelect 
 function RunProgress({ rulesetId, runId, onComplete }) {
   const { t } = useLanguage()
   const { data: run, dataUpdatedAt } = useQuery({
-    queryKey: ['run', rulesetId, runId],
+    queryKey: qk.run(rulesetId, runId),
     queryFn: () => getRun(rulesetId, runId),
     refetchInterval: (query) => {
       const status = query.state.data?.status
@@ -1093,12 +1094,12 @@ function RuleSetDashboard() {
   const [selectedPapers, setSelectedPapers] = useState(new Set())
 
   const { data: ruleset } = useQuery({
-    queryKey: ['ruleset', id],
+    queryKey: qk.ruleset(id),
     queryFn: () => getRuleset(id),
   })
 
   const { data: overviewData } = useQuery({
-    queryKey: ['topicOverview'],
+    queryKey: qk.topicOverview,
     queryFn: getTopicOverview,
   })
   const topicOverview = overviewData?.find(t => t.id === parseInt(id))
@@ -1123,7 +1124,7 @@ function RuleSetDashboard() {
   }, [searchQuery])
 
   const { data: papersData, isLoading: papersLoading } = useQuery({
-    queryKey: ['rulesetPapers', id, page, statusFilter, sourceFilter, debouncedSearch],
+    queryKey: qk.rulesetPapers(id, page, statusFilter, sourceFilter, debouncedSearch),
     queryFn: () => getRulesetPapers(id, {
       page,
       status: statusFilter,
@@ -1154,7 +1155,7 @@ function RuleSetDashboard() {
   })
 
   const { data: digestsData, isLoading: digestsLoading } = useQuery({
-    queryKey: ['digests', id],
+    queryKey: qk.digests(id),
     queryFn: () => getDigests(id),
     enabled: tab === 'digests',
     refetchInterval: tab === 'digests' ? 10000 : false,
@@ -1175,7 +1176,7 @@ function RuleSetDashboard() {
   const statusMutation = useMutation({
     mutationFn: ({ paperId, status }) => updatePaperStatus(id, paperId, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rulesetPapers', id] })
+      invalidate.paperStatusChanged(queryClient, id)
     },
   })
 
@@ -1186,7 +1187,7 @@ function RuleSetDashboard() {
   const bulkMutation = useMutation({
     mutationFn: ({ paperIds, status }) => bulkUpdatePaperStatus(id, paperIds, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rulesetPapers', id] })
+      invalidate.paperStatusChanged(queryClient, id)
       setSelectedPapers(new Set())
     },
   })
@@ -1333,8 +1334,7 @@ function RuleSetDashboard() {
             rulesetId={id}
             runId={activeRunId}
             onComplete={() => {
-              queryClient.invalidateQueries({ queryKey: ['ruleset', id] })
-              queryClient.invalidateQueries({ queryKey: ['rulesetPapers', id] })
+              invalidate.runCompleted(queryClient, id)
             }}
           />
         </div>
@@ -1464,7 +1464,7 @@ function RuleSetDashboard() {
 
           <AddPaperForm
             rulesetId={id}
-            onAdded={() => queryClient.invalidateQueries({ queryKey: ['rulesetPapers', id] })}
+            onAdded={() => invalidate.rulesetPapersChanged(queryClient, id)}
           />
 
           {papersLoading ? (
@@ -1714,17 +1714,14 @@ function RuleSetDashboard() {
       {tab === 'settings' && (
         <EditableSettings
           ruleset={ruleset}
-          onSaved={() => { queryClient.invalidateQueries({ queryKey: ['ruleset', id] }); queryClient.invalidateQueries({ queryKey: ['topicOverview'] }) }}
+          onSaved={() => invalidate.rulesetChanged(queryClient, id)}
           onReinit={(runData) => {
             setActiveRunId(runData.id)
             setTab('papers')
-            queryClient.invalidateQueries({ queryKey: ['ruleset', id] })
-            queryClient.invalidateQueries({ queryKey: ['rulesetPapers', id] })
-            queryClient.invalidateQueries({ queryKey: ['topicOverview'] })
+            invalidate.runCompleted(queryClient, id)
           }}
           onDeleted={() => {
-            queryClient.invalidateQueries({ queryKey: ['rulesets'] })
-            queryClient.invalidateQueries({ queryKey: ['topicOverview'] })
+            invalidate.rulesetDeleted(queryClient, id)
             navigate('/')
           }}
         />

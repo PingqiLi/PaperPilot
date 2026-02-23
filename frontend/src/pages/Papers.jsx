@@ -4,6 +4,7 @@ import {
   ExternalLink, Star, Archive, Inbox, BookOpen, Sparkles,
 } from 'lucide-react'
 import { getGlobalPapers, getRulesets, updatePaperStatus } from '../api/rulesets'
+import { qk } from '../api/queryKeys'
 import { useLanguage } from '../contexts/LanguageContext'
 
 const STATUS_FILTERS = [
@@ -132,7 +133,7 @@ function Papers() {
   const [page, setPage] = useState(1)
 
   const { data: topics } = useQuery({
-    queryKey: ['rulesets'],
+    queryKey: qk.rulesets,
     queryFn: getRulesets,
   })
 
@@ -142,7 +143,7 @@ function Papers() {
   }
 
   const { data: papersData, isLoading } = useQuery({
-    queryKey: ['globalPapers', statusFilter, sortBy, page],
+    queryKey: qk.globalPapers(statusFilter, sortBy, page),
     queryFn: () => getGlobalPapers({
       page,
       status: statusFilter || undefined,
@@ -154,7 +155,7 @@ function Papers() {
   const statusMutation = useMutation({
     mutationFn: ({ topicId, paperId, status }) => updatePaperStatus(topicId, paperId, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['globalPapers'] })
+      queryClient.invalidateQueries({ queryKey: qk.globalPapers() })
     },
   })
 

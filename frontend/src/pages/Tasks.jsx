@@ -6,6 +6,7 @@ import {
   ArrowRight, ChevronDown, ChevronUp, ListTodo, Pencil,
 } from 'lucide-react'
 import { getTasks } from '../api/tasks'
+import { qk } from '../api/queryKeys'
 import { useLanguage } from '../contexts/LanguageContext'
 
 const TYPE_COLORS = {
@@ -231,7 +232,7 @@ function TaskRow({ task }) {
 function Tasks() {
   const { t } = useLanguage()
   const { data, isLoading } = useQuery({
-    queryKey: ['allTasks'],
+    queryKey: qk.allTasks,
     queryFn: () => getTasks({ limit: 100 }),
     refetchInterval: (query) => {
       const items = query.state.data?.items

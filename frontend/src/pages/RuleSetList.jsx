@@ -2,10 +2,11 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, BookOpen, Clock, Zap } from 'lucide-react'
 import { getRulesets } from '../api/rulesets'
+import { qk } from '../api/queryKeys'
 
 function RuleSetList() {
   const { data: rulesets, isLoading } = useQuery({
-    queryKey: ['rulesets'],
+    queryKey: qk.rulesets,
     queryFn: getRulesets,
   })
 

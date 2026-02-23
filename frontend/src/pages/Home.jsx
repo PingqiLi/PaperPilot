@@ -5,6 +5,7 @@ import {
   BookOpen, TrendingUp, Star, ChevronRight, Plus, ExternalLink, GripVertical,
 } from 'lucide-react'
 import { getTopicOverview, reorderTopics } from '../api/rulesets'
+import { qk } from '../api/queryKeys'
 import { useLanguage } from '../contexts/LanguageContext'
 
 function formatRelativeTime(dateStr, t) {
@@ -207,7 +208,7 @@ function Home() {
   const { t } = useLanguage()
   const queryClient = useQueryClient()
   const { data: topics, isLoading } = useQuery({
-    queryKey: ['topicOverview'],
+    queryKey: qk.topicOverview,
     queryFn: getTopicOverview,
   })
 
@@ -221,7 +222,7 @@ function Home() {
 
   const reorderMutation = useMutation({
     mutationFn: reorderTopics,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['topicOverview'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.topicOverview }),
   })
 
   const handleDragStart = (e, topicId) => {

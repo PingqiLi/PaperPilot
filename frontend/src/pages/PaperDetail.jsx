@@ -7,6 +7,7 @@ import {
   Users, Calendar, Building2, Quote, RefreshCw,
 } from 'lucide-react'
 import { getPaperDetail, analyzePaper, updatePaperStatus } from '../api/rulesets'
+import { qk, invalidate } from '../api/queryKeys'
 import { useTasks } from '../contexts/TaskContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LlmLoadingBanner from '../components/LlmLoadingBanner'
@@ -239,7 +240,7 @@ function PaperDetail() {
   const [analyzing, setAnalyzing] = useState(false)
 
   const { data: paper, isLoading, refetch } = useQuery({
-    queryKey: ['paperDetail', rulesetId, paperId],
+    queryKey: qk.paperDetail(rulesetId, paperId),
     queryFn: () => getPaperDetail(rulesetId, paperId),
     refetchInterval: analyzing ? 3000 : false,
   })
@@ -253,8 +254,7 @@ function PaperDetail() {
   const statusMutation = useMutation({
     mutationFn: (status) => updatePaperStatus(rulesetId, paperId, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['paperDetail', rulesetId, paperId] })
-      queryClient.invalidateQueries({ queryKey: ['rulesetPapers', rulesetId] })
+      invalidate.paperStatusChanged(queryClient, rulesetId, paperId)
     },
   })
 

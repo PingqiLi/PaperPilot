@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Key, Mail, Sliders, Clock, Check, AlertCircle, ChevronDown, ChevronRight, Bot, GraduationCap, Send, Loader2, History, XCircle, CheckCircle2, FlaskConical, Globe } from 'lucide-react'
 import { getSettings, updateSettings, getEmailLogs, sendTestEmail } from '../api/settings'
 import { useLanguage } from '../contexts/LanguageContext'
+import { qk, invalidate } from '../api/queryKeys'
 
 const SECTIONS = [
   { key: 'api', labelKey: 'settings.api', icon: Key },
@@ -617,7 +618,7 @@ function EmailHistory() {
   const [open, setOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['emailLogs'],
+    queryKey: qk.emailLogs,
     queryFn: () => getEmailLogs({ page_size: 20 }),
     enabled: open,
   })
@@ -625,7 +626,7 @@ function EmailHistory() {
   const queryClient = useQueryClient()
   const testMutation = useMutation({
     mutationFn: sendTestEmail,
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['emailLogs'] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: qk.emailLogs }),
   })
 
   const testResult = testMutation.data
@@ -858,7 +859,7 @@ function AppSettings() {
   const [message, setMessage] = useState(null)
 
   const { data: settings, isLoading } = useQuery({
-    queryKey: ['settings'],
+    queryKey: qk.settings,
     queryFn: getSettings,
   })
 
@@ -872,8 +873,7 @@ function AppSettings() {
   const mutation = useMutation({
     mutationFn: updateSettings,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] })
-      queryClient.invalidateQueries({ queryKey: ['costStats'] })
+      invalidate.settingsChanged(queryClient)
       setChanges({})
       setMessage({ type: 'success', text: t('settings.saved') })
     },

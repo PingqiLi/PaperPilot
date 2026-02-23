@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Sparkles, Save, ArrowLeft, Loader2, X, Plus, CheckCircle2 } from 'lucide-react'
 import { generateDraft, createRuleset, createRun } from '../api/rulesets'
 import { getTask } from '../api/tasks'
+import { qk, invalidate } from '../api/queryKeys'
 import { useTasks } from '../contexts/TaskContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LlmLoadingBanner from '../components/LlmLoadingBanner'
@@ -90,7 +91,7 @@ function RuleSetWizard() {
   const [submitted, setSubmitted] = useState(false)
 
   const { data: taskData } = useQuery({
-    queryKey: ['draftTask', reviewTaskId],
+    queryKey: qk.draftTask(reviewTaskId),
     queryFn: () => getTask(reviewTaskId),
     refetchInterval: (query) => {
       const s = query.state.data?.status
@@ -117,8 +118,7 @@ function RuleSetWizard() {
     onSuccess: (data) => {
       setSubmitted(true)
       setTopicSentence('')
-      queryClient.invalidateQueries({ queryKey: ['activeTasks'] })
-      queryClient.invalidateQueries({ queryKey: ['allTasks'] })
+      invalidate.tasksChanged(queryClient)
       addToast({ id: data.task_id, title: t('ruleSet.wizard.draftSubmitted') })
       setTimeout(() => setSubmitted(false), 3000)
     },
@@ -132,10 +132,7 @@ function RuleSetWizard() {
     },
     onSuccess: ({ rs }) => {
       setSearchParams({}, { replace: true })
-      queryClient.invalidateQueries({ queryKey: ['rulesets'] })
-      queryClient.invalidateQueries({ queryKey: ['topicOverview'] })
-      queryClient.invalidateQueries({ queryKey: ['activeTasks'] })
-      queryClient.invalidateQueries({ queryKey: ['allTasks'] })
+      invalidate.topicCreated(queryClient)
       navigate(`/topics/${rs.id}`)
     },
   })

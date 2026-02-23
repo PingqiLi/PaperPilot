@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getTasks } from '../api/tasks'
+import { qk } from '../api/queryKeys'
 
 const TaskContext = createContext()
 
@@ -9,7 +10,7 @@ export function TaskProvider({ children }) {
   const prevRunningRef = useRef(new Set())
 
   const { data } = useQuery({
-    queryKey: ['activeTasks'],
+    queryKey: qk.activeTasks,
     queryFn: () => getTasks({ status: 'running,awaiting_approval', limit: 50 }),
     refetchInterval: (query) => {
       const items = query.state.data?.items

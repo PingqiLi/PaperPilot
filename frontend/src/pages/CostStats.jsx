@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { DollarSign, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getCostStats, getDailyCosts, getRequestHistory } from '../api/stats'
+import { qk } from '../api/queryKeys'
 import { useLanguage } from '../contexts/LanguageContext'
 
 const TIME_RANGES = [
@@ -125,17 +126,17 @@ function CostStats() {
   const pageSize = 20
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['costStats'],
+    queryKey: qk.costStats,
     queryFn: getCostStats,
   })
 
   const { data: dailyRaw, isLoading: dailyLoading } = useQuery({
-    queryKey: ['dailyCosts', days],
+    queryKey: qk.dailyCosts(days),
     queryFn: () => getDailyCosts(days),
   })
 
   const { data: reqData, isLoading: reqLoading } = useQuery({
-    queryKey: ['requestHistory', days, reqPage],
+    queryKey: qk.requestHistory(days, reqPage),
     queryFn: () => getRequestHistory({ page: reqPage, page_size: pageSize, days }),
   })
 
