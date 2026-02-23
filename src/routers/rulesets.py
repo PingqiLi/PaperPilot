@@ -466,11 +466,12 @@ S2_PAPER_FIELDS = (
     "publicationTypes,publicationDate"
 )
 
-_ARXIV_RE = re.compile(r"(?:arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5}(?:v\d+)?)", re.IGNORECASE)
+_ARXIV_RE = re.compile(r"(?:arxiv\.org/(?:abs|pdf|html)/)?(?:v\d+/)?(\d{4}\.\d{4,5}(?:v\d+)?)", re.IGNORECASE)
 
 
 class AddPaperRequest(BaseModel):
-    identifier: str = Field(..., min_length=1)
+    identifier: str = Field("", min_length=0)
+    s2_id: str = Field("", min_length=0)
 
 
 @router.post("/{ruleset_id}/papers/add")
@@ -484,12 +485,20 @@ async def add_paper_to_topic(
         raise HTTPException(status_code=404, detail="规则集不存在")
 
     raw = data.identifier.strip()
-    m = _ARXIV_RE.search(raw)
+    s2_id = data.s2_id.strip()
+    m = _ARXIV_RE.search(raw) if raw else None
     arxiv_id = m.group(1) if m else None
-    if not arxiv_id:
-        raise HTTPException(status_code=400, detail="无法识别 ArXiv ID，请输入如 2501.12345 或 arxiv.org/abs/2501.12345")
 
-    existing = db.query(Paper).filter(Paper.arxiv_id == arxiv_id).first()
+    if not arxiv_id and not s2_id:
+        raise HTTPException(status_code=400, detail="请提供 ArXiv ID/URL 或从搜索结果中选择论文")
+
+    if arxiv_id:
+        existing = db.query(Paper).filter(Paper.arxiv_id == arxiv_id).first()
+    else:
+        existing = db.query(Paper).filter(Paper.s2_id == s2_id).first()
+        if not existing:
+            existing = db.query(Paper).filter(Paper.arxiv_id == f"s2:{s2_id}").first()
+
     if existing:
         assoc = db.query(PaperRuleSet).filter(
             PaperRuleSet.paper_id == existing.id,
@@ -498,24 +507,44 @@ async def add_paper_to_topic(
         if assoc:
             assoc.status = "favorited"
             db.commit()
-            return {"message": "论文已存在，已标记为收藏", "paper_id": existing.id}
+            return {"message": "论文已存在，已标记为收藏", "paper_id": existing.id, "title": existing.title}
 
     s2 = SemanticScholarService()
-    s2_results = await s2.search_papers(query=f"arxiv:{arxiv_id}", limit=5, fields=S2_PAPER_FIELDS)
-
     s2_paper = None
-    for r in s2_results:
-        ext = r.get("externalIds") or {}
-        if ext.get("ArXiv") == arxiv_id or ext.get("ArXiv") == arxiv_id.split("v")[0]:
-            s2_paper = r
-            break
-    if not s2_paper and s2_results:
-        s2_paper = s2_results[0]
+
+    if arxiv_id:
+        s2_results = await s2.search_papers(query=f"arxiv:{arxiv_id}", limit=5, fields=S2_PAPER_FIELDS)
+        for r in s2_results:
+            ext = r.get("externalIds") or {}
+            if ext.get("ArXiv") == arxiv_id or ext.get("ArXiv") == arxiv_id.split("v")[0]:
+                s2_paper = r
+                break
+    else:
+        s2_results = await s2.search_papers(query=s2_id, limit=5, fields=S2_PAPER_FIELDS)
+        for r in s2_results:
+            if r.get("paperId") == s2_id:
+                s2_paper = r
+                break
 
     if not s2_paper:
         raise HTTPException(status_code=404, detail="Semantic Scholar 未收录该论文")
 
     ext_ids = s2_paper.get("externalIds") or {}
+    resolved_arxiv = ext_ids.get("ArXiv") or arxiv_id
+    paper_s2_id = s2_paper.get("paperId")
+
+    if resolved_arxiv:
+        existing = db.query(Paper).filter(Paper.arxiv_id == resolved_arxiv).first()
+        if existing:
+            assoc = db.query(PaperRuleSet).filter(
+                PaperRuleSet.paper_id == existing.id,
+                PaperRuleSet.ruleset_id == ruleset_id,
+            ).first()
+            if assoc:
+                assoc.status = "favorited"
+                db.commit()
+                return {"message": "论文已存在，已标记为收藏", "paper_id": existing.id, "title": existing.title}
+
     pub_date = None
     if s2_paper.get("publicationDate"):
         try:
@@ -528,9 +557,12 @@ async def add_paper_to_topic(
         if isinstance(a, dict) and "name" in a:
             authors.append(a["name"])
 
-    paper = existing or Paper(
-        arxiv_id=arxiv_id,
-        s2_id=s2_paper.get("paperId"),
+    final_arxiv_id = resolved_arxiv or f"s2:{paper_s2_id}"
+    pdf_url = f"https://arxiv.org/pdf/{resolved_arxiv}.pdf" if resolved_arxiv else None
+
+    paper = Paper(
+        arxiv_id=final_arxiv_id,
+        s2_id=paper_s2_id,
         title=s2_paper.get("title", ""),
         authors=authors,
         abstract=s2_paper.get("abstract"),
@@ -538,15 +570,18 @@ async def add_paper_to_topic(
         published_date=pub_date,
         year=s2_paper.get("year"),
         venue=s2_paper.get("venue"),
-        pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf",
+        pdf_url=pdf_url,
         citation_count=s2_paper.get("citationCount", 0) or 0,
         influential_citation_count=s2_paper.get("influentialCitationCount", 0) or 0,
         impact_score=compute_impact_score(s2_paper),
         is_survey=is_survey_paper(s2_paper),
     )
+
     if not existing:
         db.add(paper)
         db.flush()
+    else:
+        paper = existing
 
     assoc = PaperRuleSet(
         paper_id=paper.id,
@@ -556,9 +591,38 @@ async def add_paper_to_topic(
     )
     db.add(assoc)
     db.commit()
-
     return {"message": "论文已添加并收藏", "paper_id": paper.id, "title": paper.title}
 
+@router.get("/{ruleset_id}/papers/search")
+async def search_papers_for_add(
+    ruleset_id: int,
+    q: str = "",
+):
+    query = q.strip()
+    if not query or len(query) < 2:
+        raise HTTPException(status_code=400, detail="搜索词太短")
+
+    s2 = SemanticScholarService()
+    results = await s2.search_papers(query=query, limit=8, fields=S2_PAPER_FIELDS)
+
+    items = []
+    for r in results:
+        ext_ids = r.get("externalIds") or {}
+        authors = []
+        for a in r.get("authors", []):
+            if isinstance(a, dict) and "name" in a:
+                authors.append(a["name"])
+        items.append({
+            "s2_id": r.get("paperId", ""),
+            "arxiv_id": ext_ids.get("ArXiv"),
+            "title": r.get("title", ""),
+            "authors": authors[:5],
+            "year": r.get("year"),
+            "venue": r.get("venue"),
+            "citation_count": r.get("citationCount", 0) or 0,
+        })
+
+    return {"items": items}
 
 @router.get("/{ruleset_id}/papers/bibtex")
 def export_bibtex(
@@ -679,6 +743,5 @@ async def analyze_paper_endpoint(
 
     background_tasks.add_task(_run)
     return {"message": "分析已开始，请稍后刷新查看结果", "task_id": task.id}
-
 
 

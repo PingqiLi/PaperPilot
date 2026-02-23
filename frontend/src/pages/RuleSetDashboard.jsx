@@ -13,7 +13,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import {
   getRuleset, getRulesetPapers, createRun, getRuns, getRun, updatePaperStatus,
   getDigests, createDigest, updateRuleset, exportDigestMarkdown, getReinitPreview,
-  deleteRuleset, bulkUpdatePaperStatus, exportBibtex, addPaperToTopic, getTopicOverview,
+  deleteRuleset, bulkUpdatePaperStatus, exportBibtex, addPaperToTopic, getTopicOverview, searchPapersForAdd,
 } from '../api/rulesets'
 import { qk, invalidate } from '../api/queryKeys'
 
@@ -734,18 +734,51 @@ function AddPaperForm({ rulesetId, onAdded }) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [successMsg, setSuccessMsg] = useState(null)
+  const [searchResults, setSearchResults] = useState(null)
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState(null)
 
-  const mutation = useMutation({
-    mutationFn: (identifier) => addPaperToTopic(rulesetId, identifier),
+  const isArxivInput = (val) => /^\d{4}\.\d{4,5}(v\d+)?$/.test(val) || val.includes('arxiv.org')
+
+  const addMutation = useMutation({
+    mutationFn: (payload) => addPaperToTopic(rulesetId, payload),
     onSuccess: (data) => {
       setInput('')
       setOpen(false)
+      setSearchResults(null)
       setSuccessMsg(data.title ? t('ruleSet.addPaper.success').replace('{title}', data.title) : data.message)
       onAdded()
       setTimeout(() => setSuccessMsg(null), 3000)
     },
   })
 
+  const handleSubmit = async () => {
+    const val = input.trim()
+    if (!val) return
+    setSearchError(null)
+    if (isArxivInput(val)) {
+      addMutation.mutate({ identifier: val })
+    } else {
+      setIsSearching(true)
+      setSearchResults(null)
+      try {
+        const data = await searchPapersForAdd(rulesetId, val)
+        setSearchResults(data.items || [])
+      } catch (e) {
+        setSearchError(e.response?.data?.detail || t('ruleSet.addPaper.failed'))
+      } finally {
+        setIsSearching(false)
+      }
+    }
+  }
+
+  const handleClose = () => {
+    setOpen(false)
+    setInput('')
+    setSearchResults(null)
+    setSearchError(null)
+    addMutation.reset()
+  }
   if (!open && !successMsg) {
     return (
       <button
@@ -771,40 +804,81 @@ function AddPaperForm({ rulesetId, onAdded }) {
         </div>
       )}
       {open && (
-        <div
-          className="flex items-center gap-2"
-        >
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && input.trim()) mutation.mutate(input.trim()) }}
-            placeholder="Enter ArXiv ID or URL (e.g., 2501.12345)"
-            className="flex-1 px-3 py-2 rounded-lg border text-sm"
-            style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text)' }}
-            disabled={mutation.isPending}
-            autoFocus
-          />
-          <button
-            onClick={() => { if (input.trim()) mutation.mutate(input.trim()) }}
-            disabled={!input.trim() || mutation.isPending}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50"
-            style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', border: 'none' }}
-          >
-            {mutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            {t('ruleSet.addPaper.add')}
-          </button>
-          <button
-            onClick={() => { setOpen(false); setInput(''); mutation.reset() }}
-            className="p-2 rounded-lg cursor-pointer"
-            style={{ background: 'transparent', border: 'none', color: 'var(--muted)' }}
-          >
-            <X size={14} />
-          </button>
-        </div>
+        <>
+          <div className="flex items-center gap-2">
+            <input
+              value={input}
+              onChange={e => { setInput(e.target.value); setSearchResults(null); setSearchError(null) }}
+              onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
+              placeholder={t('ruleSet.addPaper.placeholder')}
+              className="flex-1 px-3 py-2 rounded-lg border text-sm"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              disabled={addMutation.isPending || isSearching}
+              autoFocus
+            />
+            <button
+              onClick={handleSubmit}
+              disabled={!input.trim() || addMutation.isPending || isSearching}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50"
+              style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', border: 'none' }}
+            >
+              {(addMutation.isPending || isSearching) ? <Loader2 size={14} className="animate-spin" /> : isArxivInput(input.trim()) ? <Plus size={14} /> : <Search size={14} />}
+              {t('ruleSet.addPaper.add')}
+            </button>
+            <button
+              onClick={handleClose}
+              className="p-2 rounded-lg cursor-pointer"
+              style={{ background: 'transparent', border: 'none', color: 'var(--muted)' }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+          {isSearching && (
+            <div className="flex items-center gap-2 px-3 py-2 text-xs" style={{ color: 'var(--muted)' }}>
+              <Loader2 size={12} className="animate-spin" />
+              {t('ruleSet.addPaper.searching')}
+            </div>
+          )}
+          {searchResults && searchResults.length === 0 && (
+            <p className="text-xs px-3 py-2" style={{ color: 'var(--muted)' }}>
+              {t('ruleSet.addPaper.noResults')}
+            </p>
+          )}
+          {searchResults && searchResults.length > 0 && (
+            <div
+              className="rounded-lg border overflow-hidden"
+              style={{ borderColor: 'var(--border)', maxHeight: '300px', overflowY: 'auto' }}
+            >
+              {searchResults.map((r, i) => (
+                <button
+                  key={r.s2_id}
+                  onClick={() => addMutation.mutate({ s2_id: r.s2_id })}
+                  disabled={addMutation.isPending}
+                  className="w-full text-left px-3 py-2.5 cursor-pointer disabled:opacity-50"
+                  style={{
+                    background: 'var(--bg)',
+                    borderBottom: i < searchResults.length - 1 ? '1px solid var(--border)' : 'none',
+                    color: 'var(--text)',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg)' }}
+                >
+                  <div className="text-sm font-medium leading-snug">{r.title}</div>
+                  <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: 'var(--muted)' }}>
+                    <span>{r.authors.slice(0, 3).join(', ')}{r.authors.length > 3 ? ' et al.' : ''}</span>
+                    {r.year && <span>· {r.year}</span>}
+                    {r.venue && <span>· {r.venue}</span>}
+                    {r.citation_count > 0 && <span>· {r.citation_count} {t('ruleSet.addPaper.citations')}</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
-      {mutation.isError && (
+      {(addMutation.isError || searchError) && (
         <p className="text-xs" style={{ color: 'var(--danger)' }}>
-          {mutation.error?.response?.data?.detail || t('ruleSet.addPaper.failed')}
+          {searchError || addMutation.error?.response?.data?.detail || t('ruleSet.addPaper.failed')}
         </p>
       )}
     </div>

@@ -121,8 +121,13 @@ export async function analyzePaper(rulesetId, paperId) {
   return data
 }
 
-export async function addPaperToTopic(rulesetId, identifier) {
-  const { data } = await api.post(`/rulesets/${rulesetId}/papers/add`, { identifier })
+export async function addPaperToTopic(rulesetId, payload) {
+  const { data } = await api.post(`/rulesets/${rulesetId}/papers/add`, payload)
+  return data
+}
+
+export async function searchPapersForAdd(rulesetId, query) {
+  const { data } = await api.get(`/rulesets/${rulesetId}/papers/search`, { params: { q: query } })
   return data
 }
 

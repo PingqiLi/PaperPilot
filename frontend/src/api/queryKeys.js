@@ -15,6 +15,7 @@ export const qk = {
   dailyCosts: (days) => ['dailyCosts', days],
   requestHistory: (days, page) => ['requestHistory', days, page],
   emailLogs: ['emailLogs'],
+  paperSearch: (rulesetId, q) => ['paperSearch', rulesetId, q],
 }
 
 export const invalidate = {
