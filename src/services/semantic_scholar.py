@@ -101,6 +101,37 @@ class SemanticScholarService:
             return []
 
 
+
+    async def get_paper(
+        self,
+        paper_id: str,
+        fields: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        if fields is None:
+            fields = (
+                "paperId,externalIds,title,abstract,authors,year,"
+                "citationCount,influentialCitationCount,venue,"
+                "publicationVenue,publicationTypes,publicationDate"
+            )
+        url = f"{S2_API_BASE}/paper/{paper_id}"
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                await _s2_rate_limit()
+                response = await client.get(url, params={"fields": fields}, headers=self.headers)
+                if response.status_code == 404:
+                    return None
+                if response.status_code == 429:
+                    logger.warning("S2 get_paper rate limited", paper_id=paper_id)
+                    return None
+                response.raise_for_status()
+                data = response.json()
+                if data.get("paperId"):
+                    return data
+                return None
+        except Exception as e:
+            logger.error("S2 get_paper error", paper_id=paper_id, error=str(e))
+            return None
+
     async def get_recommendations(
         self,
         paper_ids: List[str],

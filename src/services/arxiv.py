@@ -144,6 +144,22 @@ class ArxivService:
             "_source": "arxiv",
         }
 
+
+    async def get_paper_by_id(self, arxiv_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(ARXIV_API_BASE, params={"id_list": arxiv_id, "max_results": 1})
+                response.raise_for_status()
+                root = ET.fromstring(response.text)
+                entries = root.findall("atom:entry", namespaces=ARXIV_NS)
+                for entry in entries:
+                    paper = self._parse_entry(entry)
+                    if paper:
+                        return paper
+        except Exception as e:
+            logger.error("ArXiv get_paper_by_id error", arxiv_id=arxiv_id, error=str(e))
+        return None
+
     async def search(
         self,
         categories: List[str],

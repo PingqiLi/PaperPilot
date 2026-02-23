@@ -35,6 +35,7 @@ from ..services.draft_generator import generate_draft
 from ..services.impact_scoring import compute_impact_score, is_survey_paper
 from ..services.pipeline import run_initialize, run_track
 from ..services.semantic_scholar import SemanticScholarService
+from ..services.arxiv import ArxivService
 from ..services.task_manager import create_task, complete_task, fail_task, update_task
 
 logger = structlog.get_logger(__name__)
@@ -511,23 +512,19 @@ async def add_paper_to_topic(
 
     s2 = SemanticScholarService()
     s2_paper = None
-
     if arxiv_id:
-        s2_results = await s2.search_papers(query=f"arxiv:{arxiv_id}", limit=5, fields=S2_PAPER_FIELDS)
-        for r in s2_results:
-            ext = r.get("externalIds") or {}
-            if ext.get("ArXiv") == arxiv_id or ext.get("ArXiv") == arxiv_id.split("v")[0]:
-                s2_paper = r
-                break
+        s2_paper = await s2.get_paper(f"ArXiv:{arxiv_id}", fields=S2_PAPER_FIELDS)
+        if not s2_paper:
+            arxiv_svc = ArxivService()
+            arxiv_paper = await arxiv_svc.get_paper_by_id(arxiv_id)
+            if arxiv_paper:
+                s2_paper = arxiv_paper
+            else:
+                raise HTTPException(status_code=404, detail="ArXiv 未找到该论文")
     else:
-        s2_results = await s2.search_papers(query=s2_id, limit=5, fields=S2_PAPER_FIELDS)
-        for r in s2_results:
-            if r.get("paperId") == s2_id:
-                s2_paper = r
-                break
-
-    if not s2_paper:
-        raise HTTPException(status_code=404, detail="Semantic Scholar 未收录该论文")
+        s2_paper = await s2.get_paper(s2_id, fields=S2_PAPER_FIELDS)
+        if not s2_paper:
+            raise HTTPException(status_code=404, detail="Semantic Scholar 未找到该论文")
 
     ext_ids = s2_paper.get("externalIds") or {}
     resolved_arxiv = ext_ids.get("ArXiv") or arxiv_id
