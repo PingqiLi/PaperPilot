@@ -41,7 +41,7 @@ SETTINGS_SCHEMA: dict[str, dict[str, Any]] = {
     "prompt_monthly_report": {"default": "", "type": "text", "category": "prompts", "label": "Monthly Report", "desc": "Prompt for generating monthly trend reports"},
     "prompt_paper_analysis": {"default": "", "type": "text", "category": "prompts", "label": "Paper Analysis", "desc": "Prompt for generating deep-dive paper analysis"},
 
-    "schedule_track_cron": {"default": "0 0 * * 0", "category": "schedule", "label": "Track Schedule"},
+    "schedule_track_cron": {"default": "0 10 * * *", "category": "schedule", "label": "Track Schedule"},
     "schedule_weekly_cron": {"default": "0 9 * * 1", "category": "schedule", "label": "Weekly Digest Cron"},
     "schedule_monthly_cron": {"default": "0 10 1 * *", "category": "schedule", "label": "Monthly Report Cron"},
     "schedule_timezone": {"default": "Asia/Shanghai", "category": "schedule", "label": "Timezone"},

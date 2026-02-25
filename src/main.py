@@ -1,6 +1,7 @@
 """
 Paper Agent v1.0.0
 """
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,7 +13,7 @@ from sqlalchemy import text
 from .config import settings
 from .database import SessionLocal, init_db
 from .routers import app_settings, digests, health, papers, rules, rulesets, stats, tasks
-from .services.scheduler import init_scheduler
+from .services.scheduler import init_scheduler, startup_catchup
 
 structlog.configure(
     processors=[
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
     scheduler = init_scheduler()
     scheduler.start()
     logger.info("Scheduler started")
+    asyncio.get_event_loop().create_task(startup_catchup())
 
     yield
 

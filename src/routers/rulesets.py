@@ -150,7 +150,8 @@ def create_ruleset(data: RuleSetCreate, db: Session = Depends(get_db)):
     existing = db.query(RuleSet).filter(RuleSet.name == data.name, RuleSet.is_active == True).first()
     if existing:
         raise HTTPException(status_code=400, detail="规则集名称已存在")
-    ruleset = RuleSet(**data.model_dump())
+    max_order = db.query(func.max(RuleSet.display_order)).filter(RuleSet.is_active == True).scalar() or 0
+    ruleset = RuleSet(**data.model_dump(), display_order=max_order + 1)
     db.add(ruleset)
     db.commit()
     db.refresh(ruleset)

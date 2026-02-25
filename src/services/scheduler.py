@@ -1,5 +1,5 @@
 """
-定时调度 - 每日Track pipeline
+定时调度 - 每日Track pipeline + 启动补偿
 """
 from datetime import datetime, timedelta
 
@@ -12,15 +12,18 @@ from ..models import Digest, Paper, PaperRuleSet, RuleSet, Run
 from . import app_settings
 from .digest_generator import generate_monthly_report, generate_weekly_digest
 from .email_service import send_digest, format_digest_html
+from .task_manager import create_task, complete_task, fail_task
 
 logger = structlog.get_logger(__name__)
+
+MISFIRE_GRACE = 3600
 
 
 def _parse_cron(expr: str) -> dict[str, int]:
     """解析 cron 表达式 (minute hour day month day_of_week) 为 CronTrigger 参数"""
     parts = expr.strip().split()
     if len(parts) != 5:
-        return {"hour": 8, "minute": 0}
+        return {"hour": 10, "minute": 0}
     fields = {}
     if parts[0] != "*":
         fields["minute"] = int(parts[0])
@@ -53,6 +56,8 @@ def init_scheduler() -> AsyncIOScheduler:
         id="daily_track",
         name="Daily Track Pipeline",
         replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE,
+        coalesce=True,
     )
 
     scheduler.add_job(
@@ -61,6 +66,8 @@ def init_scheduler() -> AsyncIOScheduler:
         id="weekly_digest",
         name="Weekly Digest Generation",
         replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE,
+        coalesce=True,
     )
 
     scheduler.add_job(
@@ -69,6 +76,8 @@ def init_scheduler() -> AsyncIOScheduler:
         id="monthly_report",
         name="Monthly Report Generation",
         replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE,
+        coalesce=True,
     )
 
     logger.info(
@@ -77,8 +86,83 @@ def init_scheduler() -> AsyncIOScheduler:
         weekly=app_settings.get("schedule_weekly_cron"),
         monthly=app_settings.get("schedule_monthly_cron"),
         timezone=tz,
+        misfire_grace_time=MISFIRE_GRACE,
     )
     return scheduler
+
+
+async def startup_catchup():
+    """启动补偿：检查是否有 topic 错过了定时 track，立即补跑"""
+    if not app_settings.get_bool("schedule_enabled"):
+        return
+
+    cron_expr = app_settings.get("schedule_track_cron")
+    parts = cron_expr.strip().split()
+    if len(parts) == 5 and parts[4] != "*":
+        interval = timedelta(days=7)
+    else:
+        interval = timedelta(days=1)
+    threshold = datetime.utcnow() - interval - timedelta(hours=1)
+
+    db = SessionLocal()
+    try:
+        rulesets = db.query(RuleSet).filter(
+            RuleSet.is_active == True,
+            RuleSet.is_initialized == True,
+        ).all()
+
+        pending = []
+        for rs in rulesets:
+            last = rs.last_track_at
+            if last is None or last < threshold:
+                pending.append(rs)
+                logger.info(
+                    "Startup catchup needed",
+                    ruleset_id=rs.id,
+                    name=rs.name,
+                    last_track=str(last),
+                )
+
+        if not pending:
+            logger.info("Startup catchup: all topics up to date")
+            return
+
+        logger.info("Startup catchup: triggering track", count=len(pending))
+    finally:
+        db.close()
+
+    for rs in pending:
+        try:
+            await _track_one_topic(int(rs.id), str(rs.name))
+        except Exception as e:
+            logger.error("Startup catchup failed", ruleset_id=rs.id, error=str(e))
+
+
+async def _track_one_topic(ruleset_id: int, topic_name: str):
+    """为单个 topic 执行 track，创建 Run + Task 记录"""
+    from .pipeline import run_track
+
+    db = SessionLocal()
+    try:
+        run = Run(ruleset_id=ruleset_id, run_type="track", status="pending")
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+        run_id = int(getattr(run, "id"))
+    finally:
+        db.close()
+
+    task = create_task(
+        "track", f"Track: {topic_name}",
+        ruleset_id=ruleset_id, run_id=run_id,
+    )
+    task_id = int(task.id)
+
+    try:
+        await run_track(run_id, ruleset_id, task_id)
+    except Exception as e:
+        fail_task(task_id, str(e))
+        raise
 
 
 async def daily_track_job():
@@ -91,28 +175,17 @@ async def daily_track_job():
             RuleSet.is_active == True,
             RuleSet.is_initialized == True,
         ).all()
-
-        for ruleset in active_rulesets:
-            run = Run(
-                ruleset_id=ruleset.id,
-                run_type="track",
-                status="pending",
-            )
-            db.add(run)
-            db.commit()
-            db.refresh(run)
-            run_id = int(getattr(run, "id"))
-            ruleset_id = int(getattr(ruleset, "id"))
-
-            try:
-                await run_track(run_id, ruleset_id)
-            except Exception as e:
-                logger.error("Track failed for ruleset", ruleset_id=ruleset.id, error=str(e))
-
-    except Exception as e:
-        logger.error("Daily track job failed", error=str(e))
+        topics = [(int(rs.id), str(rs.name)) for rs in active_rulesets]
     finally:
         db.close()
+
+    for ruleset_id, topic_name in topics:
+        try:
+            await _track_one_topic(ruleset_id, topic_name)
+        except Exception as e:
+            logger.error("Track failed for ruleset", ruleset_id=ruleset_id, error=str(e))
+
+    logger.info("Daily track job completed", topics=len(topics))
 
 
 async def weekly_digest_job():
