@@ -19,6 +19,8 @@ SETTINGS_SCHEMA: dict[str, dict[str, Any]] = {
     "smtp_from": {"default": "", "category": "email", "label": "From Address", "desc": "Sender email shown in digest emails"},
     "digest_email_to": {"default": "", "category": "email", "label": "Recipient", "desc": "Email address to receive weekly/monthly digests"},
 
+    "init_sources": {"default": "s2,arxiv", "category": "pipeline", "label": "Init Sources", "desc": "Comma-separated paper sources for Initialize (s2, arxiv)"},
+    "track_sources": {"default": "s2,arxiv", "category": "pipeline", "label": "Track Sources", "desc": "Comma-separated paper sources for Track (s2, arxiv)"}, 
     "init_shortlist_size": {"default": "100", "type": "int", "category": "pipeline", "label": "Initialize Papers Count", "desc": "Number of top papers to LLM-score during topic initialization"},
     "init_max_surveys": {"default": "2", "type": "int", "category": "pipeline", "label": "Max Surveys in Initialize", "desc": "Keep up to N survey papers for foundational reading"},
     "track_top_n": {"default": "20", "type": "int", "category": "pipeline", "label": "Track Top-N", "desc": "Daily tracking selects top N candidates for LLM scoring"},
