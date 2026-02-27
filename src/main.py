@@ -44,6 +44,8 @@ async def lifespan(app: FastAPI):
     _migrate_monitor_to_track()
     logger.info("Database initialized")
 
+    _cleanup_orphaned_runs()
+
     scheduler = init_scheduler()
     scheduler.start()
     logger.info("Scheduler started")
@@ -78,6 +80,40 @@ def _migrate_monitor_to_track():
 
     db.close()
 
+
+
+def _cleanup_orphaned_runs():
+    db = SessionLocal()
+    try:
+        from .models import Run
+        from .models.task import Task
+        from datetime import datetime
+        stuck_runs = db.query(Run).filter(Run.status.in_(["pending", "running"])).all()
+        for run in stuck_runs:
+            run.status = "failed"
+            run.error = "Interrupted by server restart"
+            if not run.completed_at:
+                run.completed_at = datetime.utcnow()
+            stuck_tasks = db.query(Task).filter(
+                Task.run_id == run.id,
+                Task.status.in_(["pending", "running"]),
+            ).all()
+            for task in stuck_tasks:
+                task.status = "failed"
+                task.error = "Interrupted by server restart"
+                if not task.completed_at:
+                    task.completed_at = datetime.utcnow()
+        if stuck_runs:
+            db.commit()
+            logger.info("Cleaned up orphaned runs", count=len(stuck_runs),
+                        run_ids=[r.id for r in stuck_runs])
+        else:
+            logger.info("No orphaned runs found")
+    except Exception as e:
+        db.rollback()
+        logger.warning("Orphaned run cleanup failed", error=str(e))
+    finally:
+        db.close()
 
 app = FastAPI(
     title="Paper Agent",

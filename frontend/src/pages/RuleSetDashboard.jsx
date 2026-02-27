@@ -1159,6 +1159,7 @@ function RuleSetDashboard() {
   const [tab, setTab] = useState('papers')
   const [statusFilter, setStatusFilter] = useState(null)
   const [sourceFilter, setSourceFilter] = useState(null)
+  const [sortBy, setSortBy] = useState('llm_score')
   const [searchQuery, setSearchQuery] = useState('')
   const [activeRunId, setActiveRunId] = useState(null)
   const [page, setPage] = useState(1)
@@ -1198,13 +1199,13 @@ function RuleSetDashboard() {
   }, [searchQuery])
 
   const { data: papersData, isLoading: papersLoading } = useQuery({
-    queryKey: qk.rulesetPapers(id, page, statusFilter, sourceFilter, debouncedSearch),
+    queryKey: qk.rulesetPapers(id, page, statusFilter, sourceFilter, sortBy, debouncedSearch),
     queryFn: () => getRulesetPapers(id, {
       page,
       status: statusFilter,
       source: sourceFilter,
       search: debouncedSearch || undefined,
-      sort_by: 'llm_score',
+      sort_by: sortBy,
       sort_order: 'desc',
     }),
     enabled: tab === 'papers',
@@ -1447,12 +1448,12 @@ function RuleSetDashboard() {
             ].map(({ key: s, label, icon: Icon }) => (
               <button
                 key={s}
-                onClick={() => { setStatusFilter(s === 'All' ? null : s); setPage(1) }}
+                onClick={() => { setStatusFilter(s === 'All' ? null : s); setSourceFilter(null); setPage(1) }}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs cursor-pointer"
                 style={{
-                  background: (s === 'All' ? !statusFilter : statusFilter === s)
+                  background: (s === 'All' ? (!statusFilter && !sourceFilter) : statusFilter === s)
                     ? 'var(--accent-subtle)' : 'transparent',
-                  color: (s === 'All' ? !statusFilter : statusFilter === s)
+                  color: (s === 'All' ? (!statusFilter && !sourceFilter) : statusFilter === s)
                     ? 'var(--accent)' : 'var(--muted)',
                   border: '1px solid var(--border)',
                 }}
@@ -1461,6 +1462,19 @@ function RuleSetDashboard() {
                 {label}
               </button>
             ))}
+            <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
+            <button
+              onClick={() => { setSourceFilter('track'); setStatusFilter(null); setPage(1) }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs cursor-pointer"
+              style={{
+                background: sourceFilter === 'track' ? 'var(--accent-subtle)' : 'transparent',
+                color: sourceFilter === 'track' ? 'var(--accent)' : 'var(--muted)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <Radio size={12} />
+              {t('ruleSet.filter.tracked')}
+            </button>
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={handleBibtexExport}
@@ -1471,6 +1485,21 @@ function RuleSetDashboard() {
                 <Download size={12} />
                 BibTeX
               </button>
+              <select
+                value={sortBy}
+                onChange={e => { setSortBy(e.target.value); setPage(1) }}
+                className="px-3 py-1.5 rounded-md text-xs cursor-pointer"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  color: 'var(--text)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <option value="llm_score">{t('papers.sort.score')}</option>
+                <option value="impact_score">{t('papers.sort.impact')}</option>
+                <option value="citation_count">{t('papers.sort.citations')}</option>
+                <option value="published_date">{t('papers.sort.date')}</option>
+              </select>
               <div className="relative">
                 <Search
                   size={14}

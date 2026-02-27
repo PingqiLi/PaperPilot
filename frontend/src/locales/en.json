@@ -149,6 +149,7 @@
   "ruleSet.filter.inbox": "Inbox",
   "ruleSet.filter.favorited": "Favorited",
   "ruleSet.filter.archived": "Archived",
+  "ruleSet.filter.tracked": "Tracked",
   "ruleSet.exportBibtex": "Export BibTeX",
   "ruleSet.bulk.selected": "{n} selected",
   "ruleSet.bulk.favorite": "Favorite",

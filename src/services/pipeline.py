@@ -5,7 +5,7 @@ import asyncio
 import re
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import structlog
 
@@ -31,6 +31,105 @@ def _get_sources(setting_key: str) -> set[str]:
     raw = app_settings.get(setting_key)
     return {s.strip().lower() for s in raw.split(",") if s.strip()}
 
+
+async def _s2_search_stream(
+    s2: SemanticScholarService,
+    queries: list[str],
+    run_id: int,
+    year_start: int | None = None,
+    cutoff: datetime | None = None,
+) -> Dict[str, Dict[str, Any]]:
+    all_papers: Dict[str, Dict[str, Any]] = {}
+    _update_run_progress(run_id, "searching", 0, len(queries))
+
+    for i, query in enumerate(queries):
+        papers = await s2.search_papers(
+            query=query,
+            limit=100,
+            year_start=year_start,
+            fields=S2_SEARCH_FIELDS,
+        )
+        for p in papers:
+            pid = p.get("paperId")
+            if pid and pid not in all_papers:
+                if cutoff:
+                    pub_date = _parse_pub_date(p)
+                    if pub_date and pub_date < cutoff:
+                        continue
+                all_papers[pid] = p
+        _update_run_progress(run_id, "searching", i + 1, len(queries))
+
+    return all_papers
+
+
+async def _arxiv_search_stream(
+    categories: List[str],
+    keywords: List[str],
+    max_results: int,
+    date_from: str | None = None,
+) -> list[Dict[str, Any]]:
+    arxiv = ArxivService()
+    return await arxiv.search(
+        categories=categories,
+        keywords=keywords,
+        max_results=max_results,
+        date_from=date_from,
+    )
+
+
+async def _s2_recommendations_stream(
+    s2: SemanticScholarService,
+    db,
+    ruleset_id: int,
+    cutoff: datetime | None = None,
+) -> Dict[str, Dict[str, Any]]:
+    positive_s2_ids = [
+        row[0] for row in db.query(Paper.s2_id).join(
+            PaperRuleSet, Paper.id == PaperRuleSet.paper_id
+        ).filter(
+            PaperRuleSet.ruleset_id == ruleset_id,
+            Paper.s2_id.isnot(None),
+            (PaperRuleSet.status == "favorited") | (PaperRuleSet.llm_score >= 8),
+        ).order_by(PaperRuleSet.llm_score.desc().nullslast()).limit(5).all()
+        if row[0]
+    ]
+    negative_s2_ids = [
+        row[0] for row in db.query(Paper.s2_id).join(
+            PaperRuleSet, Paper.id == PaperRuleSet.paper_id
+        ).filter(
+            PaperRuleSet.ruleset_id == ruleset_id,
+            PaperRuleSet.status == "archived",
+            Paper.s2_id.isnot(None),
+        ).limit(5).all()
+        if row[0]
+    ]
+
+    recommended: Dict[str, Dict[str, Any]] = {}
+    if positive_s2_ids:
+        rec_papers = await s2.get_recommendations(
+            positive_s2_ids,
+            negative_paper_ids=negative_s2_ids or None,
+            limit=100,
+            fields=S2_SEARCH_FIELDS,
+        )
+        for p in rec_papers:
+            pid = p.get("paperId")
+            if pid and pid not in recommended:
+                if cutoff:
+                    pub_date = _parse_pub_date(p)
+                    if pub_date and pub_date < cutoff:
+                        continue
+                recommended[pid] = p
+
+        logger.info(
+            "S2 recommendations merged",
+            positive=len(positive_s2_ids),
+            negative=len(negative_s2_ids),
+            results=len(rec_papers),
+        )
+
+    return recommended
+
 def _update_run_progress(run_id: int, stage: str, done: int, total: int):
     db = SessionLocal()
     try:
@@ -41,6 +140,21 @@ def _update_run_progress(run_id: int, stage: str, done: int, total: int):
     finally:
         db.close()
 
+
+
+def _mark_run_failed(run_id: int, error: str):
+    fresh_db = SessionLocal()
+    try:
+        run = fresh_db.query(Run).filter(Run.id == run_id).first()
+        if run and run.status != "failed":
+            run.status = "failed"
+            run.error = error
+            run.completed_at = datetime.utcnow()
+            fresh_db.commit()
+    except Exception as inner_e:
+        logger.error("Failed to mark run as failed", run_id=run_id, error=str(inner_e))
+    finally:
+        fresh_db.close()
 
 def _s2_paper_to_arxiv_id(paper: Dict[str, Any]) -> str:
     external_ids = paper.get("externalIds") or {}
@@ -403,30 +517,25 @@ async def run_initialize(run_id: int, ruleset_id: int, task_id: int | None = Non
         run.started_at = datetime.utcnow()
         db.commit()
 
-        search_queries = ruleset.search_queries or [ruleset.topic_sentence]
+        topic_sentence = str(getattr(ruleset, "topic_sentence", ""))
+        raw_search_queries = getattr(ruleset, "search_queries", None)
+        if isinstance(raw_search_queries, list) and len(raw_search_queries) > 0:
+            search_queries = [str(q) for q in raw_search_queries]
+        else:
+            search_queries = [topic_sentence]
         sources = _get_sources("init_sources")
         logger.info("Init sources", sources=list(sources))
 
-        all_papers: Dict[str, Dict] = {}
-        method_papers: Dict[str, Dict] = {}
+        all_papers: Dict[str, Dict[str, Any]] = {}
+        method_papers: Dict[str, Dict[str, Any]] = {}
         arxiv_papers = []
 
         if "s2" in sources:
-            _update_run_progress(run_id, "searching", 0, len(search_queries))
-            for i, query in enumerate(search_queries):
-                papers = await s2.search_papers(
-                    query=query,
-                    limit=100,
-                    fields=S2_SEARCH_FIELDS,
-                )
-                for p in papers:
-                    pid = p.get("paperId")
-                    if pid and pid not in all_papers:
-                        all_papers[pid] = p
-                _update_run_progress(run_id, "searching", i + 1, len(search_queries))
+            all_papers = await _s2_search_stream(s2, search_queries, run_id)
             logger.info("S2 search done", total_unique=len(all_papers))
 
-            method_queries = getattr(ruleset, "method_queries", None) or []
+            raw_method_queries = getattr(ruleset, "method_queries", None)
+            method_queries = [str(q) for q in raw_method_queries] if isinstance(raw_method_queries, list) else []
             if method_queries:
                 _update_run_progress(run_id, "method_search", 0, len(method_queries))
                 for i, mq in enumerate(method_queries):
@@ -442,11 +551,14 @@ async def run_initialize(run_id: int, ruleset_id: int, task_id: int | None = Non
 
         if "arxiv" in sources:
             _update_run_progress(run_id, "arxiv_search", 0, 1)
-            arxiv = ArxivService()
             arxiv_max = app_settings.get_int("arxiv_max_papers")
-            arxiv_papers = await arxiv.search(
-                categories=ruleset.categories or [],
-                keywords=ruleset.keywords_include or [],
+            raw_categories = getattr(ruleset, "categories", None)
+            categories = [str(c) for c in raw_categories] if isinstance(raw_categories, list) else []
+            raw_keywords = getattr(ruleset, "keywords_include", None)
+            keywords = [str(k) for k in raw_keywords] if isinstance(raw_keywords, list) else []
+            arxiv_papers = await _arxiv_search_stream(
+                categories=categories,
+                keywords=keywords,
                 max_results=arxiv_max,
             )
             _update_run_progress(run_id, "arxiv_search", 1, 1)
@@ -479,7 +591,10 @@ async def run_initialize(run_id: int, ruleset_id: int, task_id: int | None = Non
         if arxiv_papers:
             for ap in arxiv_papers:
                 aid = (ap.get("externalIds") or {}).get("ArXiv", "")
-                if aid and aid not in shortlisted_arxiv_ids:
+                if not aid:
+                    arxiv_only.append(ap)
+                    continue
+                if aid not in shortlisted_arxiv_ids:
                     arxiv_only.append(ap)
                     shortlisted_arxiv_ids.add(aid)
 
@@ -528,14 +643,14 @@ async def run_initialize(run_id: int, ruleset_id: int, task_id: int | None = Non
         favorited, archived = _get_user_preferences(db, ruleset_id)
 
         scored_count = await _score_papers_concurrent(
-            saved_papers, ruleset.topic_sentence,
+            saved_papers, topic_sentence,
             favorited, archived, run_id, db,
         )
 
         citation_scored = 0
         if "s2" in sources:
             citation_scored = await _citation_snowball(
-                s2, db, ruleset_id, ruleset.topic_sentence,
+                s2, db, ruleset_id, topic_sentence,
                 favorited, archived, run_id, all_papers,
             )
         scored_count += citation_scored
@@ -559,15 +674,7 @@ async def run_initialize(run_id: int, ruleset_id: int, task_id: int | None = Non
 
     except Exception as e:
         logger.error("Initialize pipeline failed", error=str(e))
-        try:
-            run = db.query(Run).filter(Run.id == run_id).first()
-            if run:
-                run.status = "failed"
-                run.error = str(e)
-                run.completed_at = datetime.utcnow()
-                db.commit()
-        except Exception:
-            pass
+        _mark_run_failed(run_id, str(e))
         if task_id:
             fail_task(task_id, str(e))
     finally:
@@ -697,85 +804,55 @@ async def run_track(run_id: int, ruleset_id: int, task_id: int | None = None):
         run.started_at = datetime.utcnow()
         db.commit()
 
-        search_queries = ruleset.search_queries or [ruleset.topic_sentence]
+        topic_sentence = str(getattr(ruleset, "topic_sentence", ""))
+        raw_search_queries = getattr(ruleset, "search_queries", None)
+        if isinstance(raw_search_queries, list) and len(raw_search_queries) > 0:
+            search_queries = [str(q) for q in raw_search_queries]
+        else:
+            search_queries = [topic_sentence]
         sources = _get_sources("track_sources")
         logger.info("Track sources", sources=list(sources))
 
-        if ruleset.last_track_at:
-            cutoff = ruleset.last_track_at - timedelta(days=3)
+        cutoff: datetime
+        if isinstance(ruleset.last_track_at, datetime):
+            cutoff = cast(datetime, ruleset.last_track_at) - timedelta(days=3)
+        elif isinstance(ruleset.created_at, datetime):
+            cutoff = cast(datetime, ruleset.created_at)
         else:
-            cutoff = ruleset.created_at
+            cutoff = datetime.utcnow() - timedelta(days=3)
         cutoff_year = cutoff.year
 
-        all_papers: Dict[str, Dict] = {}
+        all_papers: Dict[str, Dict[str, Any]] = {}
         arxiv_papers = []
 
         if "s2" in sources:
-            _update_run_progress(run_id, "searching", 0, len(search_queries))
-            for i, query in enumerate(search_queries):
-                papers = await s2.search_papers(
-                    query=query,
-                    limit=100,
-                    year_start=cutoff_year,
-                    fields=S2_SEARCH_FIELDS,
-                )
-                for p in papers:
-                    pid = p.get("paperId")
-                    if pid and pid not in all_papers:
-                        if cutoff:
-                            pub_date = _parse_pub_date(p)
-                            if pub_date and pub_date < cutoff:
-                                continue
-                        all_papers[pid] = p
-                _update_run_progress(run_id, "searching", i + 1, len(search_queries))
+            all_papers = await _s2_search_stream(
+                s2,
+                search_queries,
+                run_id,
+                year_start=cutoff_year,
+                cutoff=cutoff,
+            )
 
-            positive_s2_ids = [
-                row[0] for row in db.query(Paper.s2_id).join(
-                    PaperRuleSet, Paper.id == PaperRuleSet.paper_id
-                ).filter(
-                    PaperRuleSet.ruleset_id == ruleset_id,
-                    Paper.s2_id.isnot(None),
-                    (PaperRuleSet.status == "favorited") | (PaperRuleSet.llm_score >= 8),
-                ).order_by(PaperRuleSet.llm_score.desc().nullslast()).limit(5).all()
-                if row[0]
-            ]
-            negative_s2_ids = [
-                row[0] for row in db.query(Paper.s2_id).join(
-                    PaperRuleSet, Paper.id == PaperRuleSet.paper_id
-                ).filter(
-                    PaperRuleSet.ruleset_id == ruleset_id,
-                    PaperRuleSet.status == "archived",
-                    Paper.s2_id.isnot(None),
-                ).limit(5).all()
-                if row[0]
-            ]
-            if positive_s2_ids:
-                rec_papers = await s2.get_recommendations(
-                    positive_s2_ids,
-                    negative_paper_ids=negative_s2_ids or None,
-                    limit=100, fields=S2_SEARCH_FIELDS,
-                )
-                for p in rec_papers:
-                    pid = p.get("paperId")
-                    if pid and pid not in all_papers:
-                        if cutoff:
-                            pub_date = _parse_pub_date(p)
-                            if pub_date and pub_date < cutoff:
-                                continue
-                        all_papers[pid] = p
-                logger.info(
-                    "S2 recommendations merged",
-                    positive=len(positive_s2_ids),
-                    negative=len(negative_s2_ids),
-                    results=len(rec_papers),
-                )
+            rec_papers = await _s2_recommendations_stream(
+                s2,
+                db,
+                ruleset_id,
+                cutoff=cutoff,
+            )
+            for pid, p in rec_papers.items():
+                if pid not in all_papers:
+                    all_papers[pid] = p
 
         if "arxiv" in sources:
-            arxiv = ArxivService()
-            arxiv_date_from = cutoff.strftime("%Y%m%d") + "0000" if cutoff else None
-            arxiv_papers = await arxiv.search(
-                categories=ruleset.categories or [],
-                keywords=ruleset.keywords_include or [],
+            arxiv_date_from = cutoff.strftime("%Y%m%d") + "0000"
+            raw_categories = getattr(ruleset, "categories", None)
+            categories = [str(c) for c in raw_categories] if isinstance(raw_categories, list) else []
+            raw_keywords = getattr(ruleset, "keywords_include", None)
+            keywords = [str(k) for k in raw_keywords] if isinstance(raw_keywords, list) else []
+            arxiv_papers = await _arxiv_search_stream(
+                categories=categories,
+                keywords=keywords,
                 max_results=app_settings.get_int("arxiv_max_papers"),
                 date_from=arxiv_date_from,
             )
@@ -787,9 +864,13 @@ async def run_track(run_id: int, ruleset_id: int, task_id: int | None = None):
                     s2_arxiv_ids.add(aid)
 
             arxiv_new = 0
-            for ap in arxiv_papers:
+            for i, ap in enumerate(arxiv_papers):
                 aid = (ap.get("externalIds") or {}).get("ArXiv", "")
-                if aid and aid not in s2_arxiv_ids:
+                if not aid:
+                    all_papers[f"arxiv:unknown:{i}"] = ap
+                    arxiv_new += 1
+                    continue
+                if aid not in s2_arxiv_ids:
                     all_papers[f"arxiv:{aid}"] = ap
                     s2_arxiv_ids.add(aid)
                     arxiv_new += 1
@@ -802,8 +883,10 @@ async def run_track(run_id: int, ruleset_id: int, task_id: int | None = None):
             all_papers = {pid: p for pid, p in all_papers.items() if _passes_source_filter(p, sf)}
             logger.info("Track source filter", filter=sf, before=before, after=len(all_papers))
 
-        keywords = ruleset.keywords_include or []
-        exclude_keywords = ruleset.keywords_exclude or []
+        raw_keywords = getattr(ruleset, "keywords_include", None)
+        keywords = [str(k) for k in raw_keywords] if isinstance(raw_keywords, list) else []
+        raw_exclude_keywords = getattr(ruleset, "keywords_exclude", None)
+        exclude_keywords = [str(k) for k in raw_exclude_keywords] if isinstance(raw_exclude_keywords, list) else []
 
         filtered = {}
         for pid, p in all_papers.items():
@@ -854,14 +937,14 @@ async def run_track(run_id: int, ruleset_id: int, task_id: int | None = None):
         favorited, archived = _get_user_preferences(db, ruleset_id)
 
         scored_count = await _score_papers_concurrent(
-            new_papers, ruleset.topic_sentence,
+            new_papers, topic_sentence,
             favorited, archived, run_id, db,
         )
 
         citation_scored = 0
         if "s2" in sources:
             citation_scored = await _citation_snowball(
-                s2, db, ruleset_id, ruleset.topic_sentence,
+                s2, db, ruleset_id, topic_sentence,
                 favorited, archived, run_id, all_papers,
                 source="track",
             )
@@ -891,15 +974,7 @@ async def run_track(run_id: int, ruleset_id: int, task_id: int | None = None):
 
     except Exception as e:
         logger.error("Track pipeline failed", error=str(e))
-        try:
-            run = db.query(Run).filter(Run.id == run_id).first()
-            if run:
-                run.status = "failed"
-                run.error = str(e)
-                run.completed_at = datetime.utcnow()
-                db.commit()
-        except Exception:
-            pass
+        _mark_run_failed(run_id, str(e))
         if task_id:
             fail_task(task_id, str(e))
     finally:

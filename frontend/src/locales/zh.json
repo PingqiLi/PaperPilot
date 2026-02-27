@@ -149,6 +149,7 @@
   "ruleSet.filter.inbox": "收件箱",
   "ruleSet.filter.favorited": "已收藏",
   "ruleSet.filter.archived": "已归档",
+  "ruleSet.filter.tracked": "已追踪",
   "ruleSet.exportBibtex": "导出 BibTeX",
   "ruleSet.bulk.selected": "已选择 {n} 项",
   "ruleSet.bulk.favorite": "收藏",
