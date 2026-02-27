@@ -108,6 +108,9 @@ function RuleSetWizard() {
     } else if (taskData.status === 'running') {
       setStep('loading')
     } else if (taskData.status === 'failed') {
+      if (taskData.result?.topic_sentence) {
+        setTopicSentence(taskData.result.topic_sentence)
+      }
       setStep('topic')
       setSearchParams({}, { replace: true })
     }

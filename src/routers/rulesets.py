@@ -62,6 +62,7 @@ async def _run_draft_generation(task_id: int, topic_sentence: str):
         update_task(task_id, status="awaiting_approval", result=draft)
     except Exception as e:
         fail_task(task_id, str(e))
+        update_task(task_id, result={"topic_sentence": topic_sentence})
         logger.error("Draft generation failed", task_id=task_id, error=str(e))
 
 
