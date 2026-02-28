@@ -36,6 +36,8 @@ def _migrate_add_columns():
         ("paper_rulesets", "analysis", "JSON"),
         ("paper_rulesets", "analyzed_at", "DATETIME"),
         ("tasks", "result", "JSON"),
+        ("rulesets", "init_sources", "VARCHAR(50)"),
+        ("rulesets", "track_sources", "VARCHAR(50)"),
     ]
     with engine.connect() as conn:
         for table, column, col_type in migrations:
