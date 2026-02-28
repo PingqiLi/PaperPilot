@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  BookOpen, TrendingUp, Star, ChevronRight, Plus, ExternalLink, GripVertical,
+  BookOpen, TrendingUp, Star, ChevronRight, Plus, ExternalLink, GripVertical, Settings,
 } from 'lucide-react'
 import { getTopicOverview, reorderTopics } from '../api/rulesets'
 import { qk } from '../api/queryKeys'
@@ -82,6 +82,14 @@ function TopicCard({ topic }) {
             {topic.topic_sentence}
           </p>
         </div>
+        <button
+          className="ml-2 flex-shrink-0 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          style={{ background: 'none', border: 'none', color: 'var(--muted)' }}
+          title={t('home.settings')}
+          onClick={e => { e.stopPropagation(); navigate(`/topics/${topic.id}?tab=settings`) }}
+        >
+          <Settings size={14} />
+        </button>
         <span
           className="ml-3 flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium"
           style={{

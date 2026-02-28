@@ -25,6 +25,8 @@ class RuleSet(Base):
     search_queries = Column(JSON, default=list)
     method_queries = Column(JSON, default=list)
     source_filter = Column(String(20), default="all")  # "all" | "arxiv" | "open_access"
+    init_sources = Column(String(50))
+    track_sources = Column(String(50))
 
     is_active = Column(Boolean, default=True)
     is_initialized = Column(Boolean, default=False)

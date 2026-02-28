@@ -33,6 +33,8 @@ class RuleSetCreate(BaseModel):
     search_queries: List[str] = []
     method_queries: List[str] = []
     source_filter: str = Field(default="all", pattern="^(all|arxiv|open_access)$")
+    init_sources: Optional[str] = None
+    track_sources: Optional[str] = None
 
 
 class RuleSetUpdate(BaseModel):
@@ -45,6 +47,8 @@ class RuleSetUpdate(BaseModel):
     method_queries: Optional[List[str]] = None
     source_filter: Optional[str] = Field(default=None, pattern="^(all|arxiv|open_access)$")
     is_active: Optional[bool] = None
+    init_sources: Optional[str] = None
+    track_sources: Optional[str] = None
 
 
 class RuleSetResponse(BaseModel):
@@ -59,6 +63,8 @@ class RuleSetResponse(BaseModel):
     search_queries: List[str]
     method_queries: List[str] = []
     source_filter: str = "all"
+    init_sources: Optional[str] = None
+    track_sources: Optional[str] = None
     is_active: bool
     is_initialized: bool
     last_track_at: Optional[datetime]

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Play, RefreshCw, Loader2, Star, Archive, Inbox, Search,
@@ -913,6 +913,8 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
       keywords_exclude: [...(ruleset.keywords_exclude || [])],
       search_queries: [...(ruleset.search_queries || [])],
       source_filter: ruleset.source_filter || 'all',
+      init_sources: ruleset.init_sources || null,
+      track_sources: ruleset.track_sources || null,
     })
     setEditing(true)
     setShowReinitDialog(false)
@@ -1023,6 +1025,30 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
             {{ all: t('ruleSet.settings.sourceAll'), arxiv: t('ruleSet.settings.sourceArxiv'), open_access: t('ruleSet.settings.sourceOpenAccess') }[ruleset.source_filter || 'all']}
           </span>
         </div>
+        <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+          <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.initSources')}</h3>
+          <div className="flex flex-wrap gap-2">
+            {ruleset.init_sources ? ruleset.init_sources.split(',').map(s => s.trim()).filter(Boolean).map(s => (
+              <span key={s} className="px-2 py-0.5 rounded-md text-xs" style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}>
+                {s === 's2' ? t('ruleSet.settings.sourceSemantic') : t('ruleSet.settings.sourceArxivLabel')}
+              </span>
+            )) : (
+              <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('ruleSet.settings.sourceDefault')}</span>
+            )}
+          </div>
+        </div>
+        <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+          <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.trackSources')}</h3>
+          <div className="flex flex-wrap gap-2">
+            {ruleset.track_sources ? ruleset.track_sources.split(',').map(s => s.trim()).filter(Boolean).map(s => (
+              <span key={s} className="px-2 py-0.5 rounded-md text-xs" style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}>
+                {s === 's2' ? t('ruleSet.settings.sourceSemantic') : t('ruleSet.settings.sourceArxivLabel')}
+              </span>
+            )) : (
+              <span className="text-xs" style={{ color: 'var(--muted)' }}>{t('ruleSet.settings.sourceDefault')}</span>
+            )}
+          </div>
+        </div>
 
         <div
           className="p-5 rounded-xl border mt-4"
@@ -1123,6 +1149,58 @@ function EditableSettings({ ruleset, onSaved, onReinit, onDeleted }) {
           <option value="open_access">{t('ruleSet.settings.sourceOpenAccess')}</option>
         </select>
       </div>
+      <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+        <label className="block text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.initSources')}</label>
+        <div className="flex flex-col gap-2">
+          {['s2', 'arxiv'].map(src => {
+            const checked = form.init_sources ? form.init_sources.split(',').map(s => s.trim()).includes(src) : true
+            return (
+              <label key={src} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    const current = form.init_sources ? form.init_sources.split(',').map(s => s.trim()).filter(Boolean) : ['s2', 'arxiv']
+                    const next = checked ? current.filter(s => s !== src) : [...current, src]
+                    update('init_sources', next.length > 0 ? next.join(',') : null)
+                  }}
+                  className="accent-[var(--accent)]"
+                  style={{ width: 16, height: 16 }}
+                />
+                <span className="text-sm" style={{ color: 'var(--text)' }}>
+                  {src === 's2' ? t('ruleSet.settings.sourceSemantic') : t('ruleSet.settings.sourceArxivLabel')}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+      </div>
+      <div className="p-5 rounded-xl border" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+        <label className="block text-sm font-medium mb-3" style={{ color: 'var(--text-strong)' }}>{t('ruleSet.settings.trackSources')}</label>
+        <div className="flex flex-col gap-2">
+          {['s2', 'arxiv'].map(src => {
+            const checked = form.track_sources ? form.track_sources.split(',').map(s => s.trim()).includes(src) : true
+            return (
+              <label key={src} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    const current = form.track_sources ? form.track_sources.split(',').map(s => s.trim()).filter(Boolean) : ['s2', 'arxiv']
+                    const next = checked ? current.filter(s => s !== src) : [...current, src]
+                    update('track_sources', next.length > 0 ? next.join(',') : null)
+                  }}
+                  className="accent-[var(--accent)]"
+                  style={{ width: 16, height: 16 }}
+                />
+                <span className="text-sm" style={{ color: 'var(--text)' }}>
+                  {src === 's2' ? t('ruleSet.settings.sourceSemantic') : t('ruleSet.settings.sourceArxivLabel')}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+      </div>
       <div className="flex items-center gap-3 justify-end">
         <button
           onClick={() => setEditing(false)}
@@ -1156,7 +1234,8 @@ function RuleSetDashboard() {
   const queryClient = useQueryClient()
   const { addToast } = useTasks()
   const { t } = useLanguage()
-  const [tab, setTab] = useState('papers')
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => searchParams.get('tab') || 'papers')
   const [statusFilter, setStatusFilter] = useState(null)
   const [sourceFilter, setSourceFilter] = useState(null)
   const [sortBy, setSortBy] = useState('llm_score')

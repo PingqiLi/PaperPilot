@@ -27,8 +27,8 @@ S2_SEARCH_FIELDS = (
 )
 
 
-def _get_sources(setting_key: str) -> set[str]:
-    raw = app_settings.get(setting_key)
+def _get_sources(setting_key: str, per_topic_value: str | None = None) -> set[str]:
+    raw = per_topic_value or app_settings.get(setting_key)
     return {s.strip().lower() for s in raw.split(",") if s.strip()}
 
 
@@ -523,7 +523,7 @@ async def run_initialize(run_id: int, ruleset_id: int, task_id: int | None = Non
             search_queries = [str(q) for q in raw_search_queries]
         else:
             search_queries = [topic_sentence]
-        sources = _get_sources("init_sources")
+        sources = _get_sources("init_sources", getattr(ruleset, "init_sources", None))
         logger.info("Init sources", sources=list(sources))
 
         all_papers: Dict[str, Dict[str, Any]] = {}
@@ -810,7 +810,7 @@ async def run_track(run_id: int, ruleset_id: int, task_id: int | None = None):
             search_queries = [str(q) for q in raw_search_queries]
         else:
             search_queries = [topic_sentence]
-        sources = _get_sources("track_sources")
+        sources = _get_sources("track_sources", getattr(ruleset, "track_sources", None))
         logger.info("Track sources", sources=list(sources))
 
         cutoff: datetime
