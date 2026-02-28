@@ -240,6 +240,7 @@
   "tasks.status.completed": "已完成",
   "tasks.status.failed": "失败",
   "tasks.view": "查看",
+  "tasks.retry": "重试",
   "tasks.continue": "继续",
   "tasks.activeCount": "{n} 个进行中",
   "tasks.awaitingHint": "草稿已生成，请返回编辑页面审阅并确认",

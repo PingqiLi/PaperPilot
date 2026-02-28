@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Loader2, CheckCircle2, XCircle, AlertCircle,
-  ArrowRight, ChevronDown, ChevronUp, ListTodo, Pencil,
+  ArrowRight, ChevronDown, ChevronUp, ListTodo, Pencil, RefreshCw,
 } from 'lucide-react'
-import { getTasks } from '../api/tasks'
+import { getTasks, retryTask } from '../api/tasks'
 import { qk } from '../api/queryKeys'
 import { useLanguage } from '../contexts/LanguageContext'
 
@@ -121,6 +121,7 @@ function ProgressStage({ stage, t }) {
 function TaskRow({ task }) {
   const navigate = useNavigate()
   const { t } = useLanguage()
+  const queryClient = useQueryClient()
   const [showError, setShowError] = useState(false)
   const navTarget = getNavTarget(task)
   const tc = TYPE_COLORS[task.task_type] || TYPE_COLORS.topic_init
@@ -133,7 +134,11 @@ function TaskRow({ task }) {
   const isActive = task.status === 'running' || task.status === 'awaiting_approval'
   const isAwaiting = task.status === 'awaiting_approval'
   const accentColor = isAwaiting ? 'var(--warn)' : 'var(--accent)'
-
+  const canRetry = task.status === 'failed' && ['topic_init', 'track'].includes(task.task_type) && task.ruleset_id
+  const retryMutation = useMutation({
+    mutationFn: () => retryTask(task.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.allTasks }),
+  })
   return (
     <div
       className="p-4 rounded-xl border transition-all"
@@ -174,6 +179,16 @@ function TaskRow({ task }) {
             style={{ background: 'none', border: 'none', color: 'var(--danger)' }}
           >
             {showError ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+        )}
+        {canRetry && (
+          <button
+            onClick={() => retryMutation.mutate()}
+            disabled={retryMutation.isPending}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs cursor-pointer"
+            style={{ background: 'var(--accent-subtle)', border: '1px solid var(--accent)', color: 'var(--accent)', opacity: retryMutation.isPending ? 0.6 : 1 }}
+          >
+            <RefreshCw size={11} className={retryMutation.isPending ? 'animate-spin' : ''} /> {t('tasks.retry')}
           </button>
         )}
         {navTarget && (

@@ -240,6 +240,7 @@
   "tasks.status.completed": "Completed",
   "tasks.status.failed": "Failed",
   "tasks.view": "View",
+  "tasks.retry": "Retry",
   "tasks.continue": "Continue",
   "tasks.activeCount": "{n} active",
   "tasks.awaitingHint": "Draft generated — return to the editor to review and confirm",
